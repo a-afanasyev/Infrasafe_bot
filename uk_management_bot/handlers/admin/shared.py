@@ -1,5 +1,6 @@
 """Разделяемое для admin-пакета: SSOT-константы кнопок, ManagerStates, auto_assign_request_by_category (AUD3-06)."""
 import html
+import os
 
 from aiogram.fsm.state import StatesGroup, State
 from sqlalchemy.orm import Session
@@ -16,7 +17,6 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 from uk_management_bot.utils.button_texts import (
     get_admin_panel_texts,
-    get_test_middleware_texts,
     get_admin_user_management_texts,
     get_admin_employee_management_texts,
     get_admin_new_requests_texts,
@@ -45,7 +45,6 @@ _PURCHASE_REQUEST_NUMBER_RE = rf"^purchase_{REQUEST_NUMBER_CORE}$"
 
 # Single Source of Truth for button texts - TASK 17
 ADMIN_PANEL_TEXTS = get_admin_panel_texts()
-TEST_MIDDLEWARE_TEXTS = get_test_middleware_texts()
 ADMIN_USER_MANAGEMENT_TEXTS = get_admin_user_management_texts()
 ADMIN_EMPLOYEE_MANAGEMENT_TEXTS = get_admin_employee_management_texts()
 ADMIN_NEW_REQUESTS_TEXTS = get_admin_new_requests_texts()
@@ -229,3 +228,14 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         return ASSIGN_ERROR
 
 
+def delete_admin_ids() -> frozenset:
+    """Telegram-id администраторов из ADMIN_USER_IDS — только они удаляют заявки.
+
+    Читается из окружения при каждом вызове, как раньше делал сам хендлер
+    удаления. Один источник для хендлера и для карточки: кнопку «Удалить»
+    не рисуем тем, кого хендлер всё равно не пустит.
+    """
+    raw = os.getenv("ADMIN_USER_IDS", "")
+    # Мусор в переменной не должен ломать карточку заявки: нечисловые части
+    # пропускаются (такой id всё равно никому не принадлежит).
+    return frozenset(int(part) for part in raw.split(",") if part.strip().isdigit())

@@ -1,12 +1,14 @@
 from typing import Optional
 
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.status_display import STATUS_EMOJI
 from uk_management_bot.authz import has_action_roles
+from uk_management_bot.utils.request_workflow.types import Action
 
 
 def get_manager_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
@@ -37,13 +39,27 @@ def get_completed_requests_submenu(language: str = "ru") -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
+class ManagerListCb(CallbackData, prefix="ml"):
+    """Открытие заявки ИЗ списка: вид списка и страница едут вместе с номером,
+    чтобы «Назад» вернул на ту же страницу (`ml:new:3:261114-007`)."""
+
+    kind: str
+    page: int
+    num: str
+
+
 def _status_icon(status: str) -> str:
     """Return status emoji from the centralised STATUS_EMOJI mapping."""
     return STATUS_EMOJI.get(status, "📋")
 
 
-def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: int, language: str = "ru") -> InlineKeyboardMarkup:
-    """Список заявок: кнопки "#номер • Категория" и пагинация."""
+def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: int, language: str = "ru", kind: str = "active") -> InlineKeyboardMarkup:
+    """Список заявок: кнопки "#номер • Категория • адрес [• suffix]" и пагинация.
+
+    ``kind`` — вид списка (new/active/review/…): уходит в callback пейджера,
+    чтобы листался тот список, который открыт. ``suffix`` строки — пометка
+    вида «⏳ 5ч» или «Возвратная».
+    """
     builder = InlineKeyboardBuilder()
     for item in requests:
         # address в БД nullable — None валил весь список менеджера (live-QA 2026-09-03)
@@ -55,17 +71,18 @@ def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: in
         request_number = item.get('request_number', item.get('id', 'N/A'))
         builder.row(
             InlineKeyboardButton(
-                text=f"{icon} #{request_number} • {item['category']} • {short_addr}",
-                callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mview_", str(request_number))
+                text=f"{icon} #{request_number} • {item['category']} • {short_addr}"
+                     + (f" • {item['suffix']}" if item.get("suffix") else ""),
+                callback_data=ManagerListCb(kind=kind, page=page, num=str(request_number)).pack()
             )
         )
     # Пагинация
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"mreq_page_{page-1}"))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"mreq_page_{kind}_{page-1}"))
     nav.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="mreq_page_curr"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"mreq_page_{page+1}"))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"mreq_page_{kind}_{page+1}"))
     if nav:
         builder.row(*nav)
     return builder.as_markup()
@@ -128,8 +145,8 @@ def get_user_approval_keyboard(user_id: int, language: str = "ru") -> InlineKeyb
     logger = logging.getLogger(__name__)
 
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.approve", language=language), callback_data=f"approve_user_{user_id}"))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.reject", language=language), callback_data=f"reject_user_{user_id}"))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.approve", language=language), style="success", callback_data=f"approve_user_{user_id}"))
+    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.reject", language=language), style="danger", callback_data=f"reject_user_{user_id}"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.view_profile", language=language), callback_data=f"view_user_{user_id}"))
     builder.adjust(2)
 
@@ -139,30 +156,67 @@ def get_user_approval_keyboard(user_id: int, language: str = "ru") -> InlineKeyb
     return builder.as_markup()
 
 
-def get_manager_request_actions_keyboard(request_number: str, has_media: bool = False, language: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура действий с заявкой для менеджеров
+# Кнопки карточки менеджера: (префикс callback, действие канона, ключ текста, цвет).
+# Видимость — из `ACTION_TABLE[action].from_statuses`, своего списка статусов нет.
+MANAGER_CARD_ACTIONS = (
+    ("accept_", Action.MANAGER_ASSIGN, "admin.keyboards.to_work", "success"),
+    ("mgr_deny_", Action.CANCEL, "admin.keyboards.decline", "danger"),
+    ("clarify_", Action.CLARIFY_REQUEST, "admin.keyboards.clarify", None),
+    ("purchase_", Action.MANAGER_PURCHASE, "admin.keyboards.to_purchase", None),
+    ("mgr_complete_", Action.MANAGER_COMPLETE, "admin.keyboards.complete", "success"),
+)
+
+
+def _styled_button(text: str, callback_data: str, style: Optional[str] = None) -> InlineKeyboardButton:
+    """Inline-кнопка с цветом (Bot API 9.4: danger/success/primary); None — обычная."""
+    extra = {"style": style} if style else {}
+    return InlineKeyboardButton(text=text, callback_data=callback_data, **extra)
+
+
+def get_manager_request_actions_keyboard(
+    request_number: str,
+    has_media: bool = False,
+    language: str = "ru",
+    *,
+    status: Optional[str] = None,
+    assigned: bool = False,
+    can_delete: bool = False,
+) -> InlineKeyboardMarkup:
+    """Действия менеджера с заявкой — только те, что канон пускает из ``status``.
 
     Args:
-        request_number: Номер заявки
-        has_media: Есть ли прикрепленные медиафайлы к заявке
-        language: Язык интерфейса
+        status: статус заявки; None — показать все действия (вызовы без статуса).
+        assigned: у заявки уже есть исполнитель или группа — «В работу» скрыта,
+            назначением управляет строка «Переназначить».
+        can_delete: удаление доступно только администраторам из ADMIN_USER_IDS —
+            остальным кнопка вела бы в отказ.
     """
+    from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
+
     builder = InlineKeyboardBuilder()
-
-    # Основные действия с заявкой - сокращенный текст для лучшей читаемости
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.to_work", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("accept_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.decline", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_deny_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.clarify", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("clarify_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.to_purchase", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("purchase_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.complete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_complete_", request_number)))
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.delete", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("mgr_delete_", request_number)))
-
-    # Настройка расположения кнопок (2 кнопки в ряд для основных действий)
+    for prefix, action, text_key, style in MANAGER_CARD_ACTIONS:
+        if status is not None and status not in ACTION_TABLE[action].from_statuses:
+            continue
+        if prefix == "accept_" and assigned:
+            continue
+        builder.add(_styled_button(
+            get_text(text_key, language=language),
+            RequestCallbackHelper.create_callback_data_with_request_number(prefix, request_number),
+            style,
+        ))
+    if can_delete:
+        builder.add(_styled_button(
+            get_text("admin.keyboards.delete", language=language),
+            RequestCallbackHelper.create_callback_data_with_request_number("mgr_delete_", request_number),
+            "danger",
+        ))
     builder.adjust(2)
 
-    # Кнопка для просмотра медиафайлов - показывается только если есть медиа
     if has_media:
-        builder.row(InlineKeyboardButton(text=get_text("admin.keyboards.media", language=language), callback_data=RequestCallbackHelper.create_callback_data_with_request_number("media_", request_number)))
+        builder.row(InlineKeyboardButton(
+            text=get_text("admin.keyboards.media", language=language),
+            callback_data=RequestCallbackHelper.create_callback_data_with_request_number("media_", request_number),
+        ))
 
     return builder.as_markup()
 
@@ -180,7 +234,7 @@ def get_manager_completed_request_actions_keyboard(request_number: str, is_retur
     if is_returned:
         # Для возвратных заявок - показать другие действия
         builder.row(InlineKeyboardButton(
-            text=get_text("admin.keyboards.reconfirm", language=language),
+            text=get_text("admin.keyboards.reconfirm", language=language), style="success",
             callback_data=RequestCallbackHelper.create_callback_data_with_request_number("reconfirm_completed_", request_number)
         ))
         builder.row(InlineKeyboardButton(
@@ -190,7 +244,7 @@ def get_manager_completed_request_actions_keyboard(request_number: str, is_retur
     else:
         # Для обычных исполненных заявок
         builder.row(InlineKeyboardButton(
-            text=get_text("admin.keyboards.confirm_completion", language=language),
+            text=get_text("admin.keyboards.confirm_completion", language=language), style="success",
             callback_data=RequestCallbackHelper.create_callback_data_with_request_number("confirm_completed_", request_number)
         ))
         builder.row(InlineKeyboardButton(
@@ -238,11 +292,11 @@ def get_applicant_completed_request_actions_keyboard(request_number: str, langua
     builder = InlineKeyboardBuilder()
 
     builder.row(InlineKeyboardButton(
-        text=get_text("admin.keyboards.accept_request", language=language),
+        text=get_text("admin.keyboards.accept_request", language=language), style="success",
         callback_data=f"accept_request_{request_number}"
     ))
     builder.row(InlineKeyboardButton(
-        text=get_text("admin.keyboards.return_request", language=language),
+        text=get_text("admin.keyboards.return_request", language=language), style="danger",
         callback_data=f"return_request_{request_number}"
     ))
     builder.row(InlineKeyboardButton(
@@ -396,7 +450,7 @@ def get_unaccepted_request_actions_keyboard(request_number: str, language: str =
 
     # Кнопка принятия заявки менеджером
     builder.row(InlineKeyboardButton(
-        text=get_text("admin.keyboards.accept_for_applicant", language=language),
+        text=get_text("admin.keyboards.accept_for_applicant", language=language), style="success",
         callback_data=f"unaccepted_accept_{request_number}"
     ))
 

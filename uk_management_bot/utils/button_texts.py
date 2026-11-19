@@ -267,10 +267,6 @@ def _init_button_texts() -> dict:
         fallback_text="⏭ Пропустить"
     )
     # Admin panel
-    button_texts['test_middleware'] = get_button_texts_for_all_languages(
-        "admin.keyboards.test_middleware",
-        fallback_text="🧪 Тест middleware"
-    )
     button_texts['admin_user_management'] = get_button_texts_for_all_languages(
         "admin.keyboards.user_management",
         fallback_text="👥 Управление пользователями"
@@ -596,10 +592,6 @@ def get_address_directory_texts() -> List[str]:
 
 def get_skip_texts() -> List[str]:
     return BUTTON_TEXTS.get('skip', ["⏭ Пропустить"])
-
-
-def get_test_middleware_texts() -> List[str]:
-    return BUTTON_TEXTS.get('test_middleware', ["🧪 Тест middleware"])
 
 
 def get_admin_user_management_texts() -> List[str]:

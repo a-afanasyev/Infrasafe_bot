@@ -162,57 +162,35 @@ class AdminHandlerService:
 
     # ── Списки заявок (manager-view) ─────────────────────────────────────────
 
-    def list_active_requests(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(Request.status.in_(ACTIVE_STATUSES))
-            .order_by(
-                Request.updated_at.desc().nullslast(), Request.created_at.desc()
-            )
-            .limit(limit)
-            .all()
-        )
+    def _manager_list_query(self, kind: str):
+        """Запрос одного из списков менеджера: фильтр + порядок вида ``kind``.
 
-    def count_active_requests(self) -> int:
-        return (
-            self.db.query(Request)
-            .filter(Request.status.in_(ACTIVE_STATUSES))
-            .count()
-        )
+        Номер заявки — последний ключ сортировки: без него строки с равным
+        временем могли бы попасть на две страницы или ни на одну.
+        """
+        recent = (Request.updated_at.desc().nullslast(), Request.created_at.desc())
+        specs = {
+            "new": (Request.status == REQUEST_STATUS_NEW, (Request.created_at.desc(),)),
+            "active": (Request.status.in_(ACTIVE_STATUSES), recent),
+            "executed": (Request.status == REQUEST_STATUS_EXECUTED,
+                         (Request.is_returned.desc(), *recent)),
+            "review": (awaiting_manager_clause(), (Request.is_returned.desc(), *recent)),
+            "returned": (returned_for_review_clause(),
+                         (Request.returned_at.desc().nullslast(), *recent)),
+            "unaccepted": (awaiting_applicant_clause(),
+                           (Request.completed_at.desc().nullslast(), *recent)),
+        }
+        if kind not in specs:
+            raise ValueError(f"unknown manager list kind: {kind!r}")
+        clause, order = specs[kind]
+        return self.db.query(Request).filter(clause).order_by(
+            *order, Request.request_number.desc())
 
-    def page_active_requests(self, offset: int, limit: int) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(Request.status.in_(ACTIVE_STATUSES))
-            .order_by(
-                Request.updated_at.desc().nullslast(), Request.created_at.desc()
-            )
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+    def count_manager_list(self, kind: str) -> int:
+        return self._manager_list_query(kind).order_by(None).count()
 
-    def list_new_requests(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(Request.status == REQUEST_STATUS_NEW)
-            .order_by(Request.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-
-    def list_executed_requests(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(Request.status == REQUEST_STATUS_EXECUTED)
-            .order_by(
-                Request.is_returned.desc(),
-                Request.updated_at.desc().nullslast(),
-                Request.created_at.desc(),
-            )
-            .limit(limit)
-            .all()
-        )
+    def page_manager_list(self, kind: str, offset: int, limit: int) -> List[Request]:
+        return self._manager_list_query(kind).offset(offset).limit(limit).all()
 
     def list_archive_requests(self, limit: int = 10) -> List[Request]:
         return (
@@ -246,45 +224,6 @@ class AdminHandlerService:
 
     def count_awaiting_applicant(self) -> int:
         return self.db.query(Request).filter(awaiting_applicant_clause()).count()
-
-    def list_awaiting_manager(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(awaiting_manager_clause())
-            .order_by(
-                Request.is_returned.desc(),
-                Request.updated_at.desc().nullslast(),
-                Request.created_at.desc(),
-            )
-            .limit(limit)
-            .all()
-        )
-
-    def list_returned_for_review(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(returned_for_review_clause())
-            .order_by(
-                Request.returned_at.desc().nullslast(),
-                Request.updated_at.desc().nullslast(),
-                Request.created_at.desc(),
-            )
-            .limit(limit)
-            .all()
-        )
-
-    def list_awaiting_applicant(self, limit: int = 20) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(awaiting_applicant_clause())
-            .order_by(
-                Request.completed_at.desc().nullslast(),
-                Request.updated_at.desc().nullslast(),
-                Request.created_at.desc(),
-            )
-            .limit(limit)
-            .all()
-        )
 
     # ── Best-effort post-commit правки полей вне workflow-канона ─────────────
     # (мутация + commit ровно на той же границе, что и в исходном хендлере)

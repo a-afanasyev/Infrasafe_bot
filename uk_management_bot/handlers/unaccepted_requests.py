@@ -19,17 +19,17 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Optional
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
-from uk_management_bot.keyboards.admin import get_manager_main_keyboard, get_manager_request_list_kb
+from uk_management_bot.handlers.admin.lists import build_manager_list
+from uk_management_bot.keyboards.admin import get_manager_main_keyboard
+from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 from uk_management_bot.utils.workflow_predicates import (
     is_awaiting_applicant,
-    awaiting_applicant_clause,
 )
 from uk_management_bot.utils.helpers import get_text
 # 2a-final fix D: используем канонический has_admin_access (читает user.roles
@@ -82,15 +82,6 @@ class _NotifyTargets:
     executor_telegram_id: Optional[int]
     applicant_language: str = "ru"
     executor_language: str = "ru"
-
-
-@dataclass(frozen=True)
-class _UnacceptedRow:
-    """Строка списка непринятых заявок для get_manager_request_list_kb."""
-    request_number: str
-    category: str
-    address: Optional[str]
-    completed_at: Optional[datetime]
 
 
 # ==========================================================================
@@ -207,31 +198,6 @@ def _load_notify_targets(db, applicant_user_id, executor_id) -> _NotifyTargets:
         applicant_language=(applicant.language or "ru") if applicant else "ru",
         executor_language=executor_language,
     )
-
-
-def _load_unaccepted_rows(db) -> list:
-    """-> [_UnacceptedRow] непринятых заявок (топ-20 по свежести)."""
-    # Получаем список непринятых заявок
-    q = (
-        db.query(Request)
-        .filter(awaiting_applicant_clause())
-        .order_by(
-            Request.completed_at.desc().nullslast(),
-            Request.updated_at.desc().nullslast(),
-            Request.created_at.desc()
-        )
-    )
-    requests = q.limit(20).all()
-
-    return [
-        _UnacceptedRow(
-            request_number=r.request_number,
-            category=r.category,
-            address=r.address,
-            completed_at=r.completed_at if r.completed_at else r.updated_at,
-        )
-        for r in requests
-    ]
 
 
 @router.callback_query(F.data.startswith("unaccepted_remind_"))
@@ -492,59 +458,11 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, roles: list = 
             await callback.answer(get_text("unaccepted.handlers.no_permission", language=lang), show_alert=True)
             return
 
-        requests = await run_db(_load_unaccepted_rows, db=_db)
-
-        if not requests:
-            await callback.message.edit_text(
-                get_text("unaccepted.handlers.no_unaccepted_requests", language=lang),
-                parse_mode="HTML"
-            )
-            await callback.answer()
-            return
-
-        # Форматируем список
-        items = []
-        now = datetime.now(timezone.utc)
-
-        for r in requests:
-            completed_at = r.completed_at
-            if completed_at:
-                if completed_at.tzinfo is None:
-                    from datetime import timezone as dt_tz
-                    completed_at = completed_at.replace(tzinfo=dt_tz.utc)
-
-                waiting_time = now - completed_at
-                days = waiting_time.days
-                hours = waiting_time.seconds // 3600
-                minutes = (waiting_time.seconds % 3600) // 60
-
-                # BUG-153 п.2: суффиксы через локаль (класс BUG-147).
-                d_s = get_text("unaccepted.handlers.days_short", language=lang)
-                h_s = get_text("unaccepted.handlers.hours_short", language=lang)
-                m_s = get_text("unaccepted.handlers.minutes_short", language=lang)
-                if days > 0:
-                    time_str = f"{days}{d_s} {hours}{h_s}"
-                elif hours > 0:
-                    time_str = f"{hours}{h_s} {minutes}{m_s}"
-                else:
-                    time_str = f"{minutes}{m_s}"
-            else:
-                time_str = get_text("unaccepted.handlers.unknown_short", language=lang)
-
-            item = {
-                "request_number": r.request_number,
-                "category": r.category,
-                "address": r.address or get_text("unaccepted.handlers.address_not_specified", language=lang),
-                "status": f"⏳ {time_str}"
-            }
-            items.append(item)
-
-        await callback.message.edit_text(
-            get_text("unaccepted.handlers.unaccepted_list_title", language=lang).format(count=len(requests)),
-            reply_markup=get_manager_request_list_kb(items, 1, 1),
-            parse_mode="HTML"
-        )
-
+        # Тот же листаемый список, что открывается из меню: раньше здесь жила
+        # вторая реализация — топ-20 без страниц и без времени ожидания в строке.
+        text, markup = await run_db(
+            lambda s: build_manager_list(AdminHandlerService(s), "unaccepted", 1, lang), db=_db)
+        await callback.message.edit_text(text, reply_markup=markup)
         await callback.answer()
 
     except Exception as e:

@@ -35,6 +35,7 @@ from .shared import (
 )
 
 from .lists import _render_manager_request_list
+from .shared import delete_admin_ids
 
 logger = logging.getLogger(__name__)
 
@@ -369,10 +370,7 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         logger.info(f"Попытка удаления заявки пользователем {callback.from_user.id}")
 
         # Проверяем права доступа - ТОЛЬКО АДМИНИСТРАТОРЫ могут удалять заявки
-        import os
-        admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
-        admin_ids = [int(id.strip()) for id in admin_ids_str.split(",") if id.strip()]
-
+        admin_ids = delete_admin_ids()
         if callback.from_user.id not in admin_ids:
             await callback.answer(get_text("admin.handlers.delete_admin_only", language=lang), show_alert=True)
             logger.warning(f"Пользователь {callback.from_user.id} попытался удалить заявку без прав администратора")

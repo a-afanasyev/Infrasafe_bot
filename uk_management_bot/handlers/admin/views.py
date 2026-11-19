@@ -35,19 +35,108 @@ from uk_management_bot.services.request_media_entries import parse_media_entries
 from uk_management_bot.services.completion_media import get_completion_media_entries
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.user_names import display_name, full_name
+from uk_management_bot.keyboards.admin import ManagerListCb
+from uk_management_bot.utils.request_workflow.projections import normalize_status
+from uk_management_bot.utils.request_workflow.types import STATUS_RETURNED
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 
 from ._router import router
 from .elevator_hint import send_elevator_hint
+from .lists import _MANAGER_LISTS, build_manager_list, edit_quiet
+from .shared import delete_admin_ids
 
 logger = logging.getLogger(__name__)
 
 
 # ===== ОБРАБОТЧИКИ ПРОСМОТРА ЗАЯВОК ДЛЯ МЕНЕДЖЕРОВ =====
 
+def _back_row(request_number: str, back, lang: str) -> list:
+    """«Назад к списку»: на ту же страницу, если карточку открыли из списка."""
+    target = f"mreq_page_{back[0]}_{back[1]}" if back else f"mreq_back_{request_number}"
+    return [InlineKeyboardButton(
+        text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=target)]
+
+
+def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, roles,
+                                viewer_id: int, lang: str, back=None) -> InlineKeyboardMarkup:
+    """Клавиатура карточки заявки менеджера по состоянию заявки.
+
+    Ветки: ждёт заявителя → напомнить/принять за него; ждёт проверки менеджером
+    → подтвердить/вернуть; возвращена жителем → принять (возврат необоснован)/
+    вернуть; иначе — действия, которые канон пускает из текущего статуса.
+    ``back`` — ``(вид списка, страница)``, если карточку открыли из списка.
+    """
+    from uk_management_bot.keyboards.admin import (
+        get_change_category_button_row,
+        get_manager_completed_request_actions_keyboard,
+        get_manager_request_actions_keyboard,
+        get_reassign_button_row,
+        get_unaccepted_request_actions_keyboard,
+    )
+
+    number = request.request_number
+    canon = normalize_status(request)
+    media_row = [InlineKeyboardButton(
+        text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{number}")]
+    discussion = get_discussion_rows(
+        number, has_report=bool(request.completion_report), language=lang)
+
+    if is_awaiting_applicant(request):
+        rows = list(get_unaccepted_request_actions_keyboard(number, language=lang).inline_keyboard)
+        # Последняя строка — «назад к списку непринятых»: меняем на возврат на страницу.
+        own_back = rows.pop()
+        if has_media:
+            rows.append(media_row)
+        rows.extend(discussion)
+        rows.append(_back_row(number, back, lang) if back else own_back)
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+
+    returned = canon == STATUS_RETURNED
+    if is_awaiting_manager(request) or returned:
+        # «Принять (возврат необоснован)» = MANAGER_FORCE_ACCEPT, канон пускает
+        # его только из «Возвращена»/«Исполнено»; «Выполнена» подтверждается
+        # MANAGER_CONFIRM — поэтому is_returned берём из канона, а не из флага.
+        rows = list(get_manager_completed_request_actions_keyboard(
+            number, is_returned=returned, language=lang).inline_keyboard)
+        if has_media:
+            rows.append(media_row)
+        rows.extend(discussion)
+        rows.append(_back_row(number, back, lang))
+        return InlineKeyboardMarkup(inline_keyboard=rows)
+
+    rows = list(get_manager_request_actions_keyboard(
+        number, has_media=has_media, language=lang, status=canon,
+        assigned=bool(active_assignment) or request.executor_id is not None,
+        can_delete=viewer_id in delete_admin_ids(),
+    ).inline_keyboard)
+    # Переназначение — только при активном назначении и подходящем статусе.
+    # Легаси до миграции 011: строки назначения нет, а исполнитель у заявки
+    # есть — канон её переназначить пускает.
+    rows.extend(row for row in (
+        get_reassign_button_row(
+            number,
+            assignment_type=active_assignment.assignment_type if active_assignment else None,
+            status=request.status, has_executor=request.executor_id is not None,
+            roles=roles, language=lang),
+        # Смена категории (решение владельца 2026-09-03): любой нетерминальный
+        # статус, только менеджер.
+        get_change_category_button_row(number, status=request.status, roles=roles, language=lang),
+    ) if row)
+    rows.extend(discussion)
+    rows.append(_back_row(number, back, lang))
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 @router.callback_query(F.data.startswith("mview_"))
-async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Обработка просмотра деталей заявки для менеджеров"""
+@router.callback_query(ManagerListCb.filter())
+async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", callback_data: ManagerListCb = None):
+    """Карточка заявки менеджера.
+
+    Два входа: `ml:<вид>:<страница>:<номер>` из списка — тогда «Назад» вернёт на
+    ту же страницу; `mview_<номер>` — старые сообщения и переходы из других
+    экранов. Хендлер один на оба фильтра: второй async-хендлер с sync-сессией
+    гейт AUD3-07 не пускает.
+    """
     try:
         lang = language
         logger.info(f"Обработка просмотра заявки менеджером {callback.from_user.id}")
@@ -56,8 +145,14 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("admin.handlers.no_access_view_requests", language=lang), show_alert=True)
             return
-        
-        request_number = callback.data.replace("mview_", "")
+
+        back = None
+        if callback_data is not None:
+            request_number = callback_data.num
+            if callback_data.kind in _MANAGER_LISTS:
+                back = (callback_data.kind, callback_data.page)
+        else:
+            request_number = callback.data.replace("mview_", "")
 
         svc = AdminHandlerService(db)
         # Получаем заявку из базы данных
@@ -123,25 +218,14 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         )
         has_media = len(media_files) > 0 or len(completion_media) > 0
 
-        # Создаем клавиатуру действий для менеджера
-        from uk_management_bot.keyboards.admin import (
-            get_manager_request_actions_keyboard,
-            get_manager_completed_request_actions_keyboard,
-            get_reassign_button_row,
-            get_unaccepted_request_actions_keyboard
-        )
-
-        # Для исполненных, но непринятых заявок (ожидают приёмки заявителем) - специальная клавиатура
+        # Для ожидающих приёмки заявителем — сколько уже ждём.
         if is_awaiting_applicant(request):
-            # Добавляем информацию о времени ожидания принятия
             from datetime import datetime, timezone
             completed_at = request.completed_at if request.completed_at else request.updated_at
             if completed_at:
                 if completed_at.tzinfo is None:
-                    from datetime import timezone as dt_tz
-                    completed_at = completed_at.replace(tzinfo=dt_tz.utc)
-                now = datetime.now(timezone.utc)
-                waiting_time = now - completed_at
+                    completed_at = completed_at.replace(tzinfo=timezone.utc)
+                waiting_time = datetime.now(timezone.utc) - completed_at
                 days = waiting_time.days
                 hours = waiting_time.seconds // 3600
                 minutes = (waiting_time.seconds % 3600) // 60
@@ -155,71 +239,9 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
                 message_text += "\n" + get_text("admin.handlers.waiting_acceptance", language=lang).format(time_str=time_str) + "\n"
 
-            actions_kb = get_unaccepted_request_actions_keyboard(request.request_number)
-
-            # Добавляем кнопку медиа если есть
-            rows = list(actions_kb.inline_keyboard)
-            if has_media:
-                # Вставляем кнопку медиа перед кнопкой "Назад к списку"
-                rows.insert(-1, [InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
-            rows.extend(get_discussion_rows(
-                request.request_number,
-                has_report=bool(request.completion_report),
-                language=lang,
-            ))
-            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-
-        # Для заявок, ожидающих подтверждения менеджером - специальная клавиатура
-        elif is_awaiting_manager(request):
-            actions_kb = get_manager_completed_request_actions_keyboard(request.request_number, is_returned=request.is_returned)
-
-            # Добавляем кнопку медиа если есть
-            rows = list(actions_kb.inline_keyboard)
-            if has_media:
-                rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_media", language=lang), callback_data=f"media_{request.request_number}")])
-            rows.extend(get_discussion_rows(
-                request.request_number,
-                has_report=bool(request.completion_report),
-                language=lang,
-            ))
-            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
-            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-        else:
-            # Для обычных заявок - стандартная клавиатура
-            actions_kb = get_manager_request_actions_keyboard(request.request_number, has_media=has_media)
-
-            # Добавляем кнопку "Назад к списку"
-            rows = list(actions_kb.inline_keyboard)
-            # Переназначение — только при активном назначении и подходящем
-            # статусе. active_assignment уже прочитан выше для ТЕКСТА карточки,
-            # второй запрос не нужен.
-            reassign_row = get_reassign_button_row(
-                request.request_number,
-                assignment_type=(active_assignment.assignment_type
-                                 if active_assignment else None),
-                status=request.status,
-                # Легаси до миграции 011: строки назначения нет, а исполнитель
-                # у заявки есть — канон её переназначить пускает.
-                has_executor=request.executor_id is not None,
-                roles=roles,
-                language=lang,
-            )
-            if reassign_row:
-                rows.append(reassign_row)
-            # Смена категории (решение владельца 2026-09-03): любой
-            # нетерминальный статус, только менеджер.
-            from uk_management_bot.keyboards.admin import get_change_category_button_row
-            category_row = get_change_category_button_row(
-                request.request_number, status=request.status, roles=roles, language=lang)
-            if category_row:
-                rows.append(category_row)
-            rows.extend(get_discussion_rows(
-                request.request_number,
-                has_report=bool(request.completion_report),
-                language=lang,
-            ))
-            rows.append([InlineKeyboardButton(text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=f"mreq_back_{request.request_number}")])
-            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+        keyboard = build_manager_card_keyboard(
+            request, active_assignment=active_assignment, has_media=has_media,
+            roles=roles, viewer_id=callback.from_user.id, lang=lang, back=back)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
         
@@ -645,45 +667,21 @@ async def handle_manager_request_pagination(callback: CallbackQuery, db: Session
             await callback.answer(get_text("admin.handlers.no_access_view_requests", language=lang), show_alert=True)
             return
 
-        # Парсим данные пагинации
+        # `mreq_page_<kind>_<n>`; старые сообщения шлют `mreq_page_<n>` — это активные.
         page_data = callback.data.replace("mreq_page_", "")
-
         if page_data == "curr":
             await callback.answer(get_text("admin.handlers.current_page", language=lang))
             return
-        
-        current_page = int(page_data)
-
-        # Определяем тип списка заявок (новые, активные, архив)
-        # Пока что показываем активные заявки
-        svc = AdminHandlerService(db)
-
-        # Вычисляем общее количество страниц
-        total_requests = svc.count_active_requests()
-        requests_per_page = 10
-        total_pages = max(1, (total_requests + requests_per_page - 1) // requests_per_page)
-
-        if current_page < 1 or current_page > total_pages:
+        kind, _, page_str = page_data.rpartition("_")
+        kind = kind or "active"
+        if kind not in _MANAGER_LISTS or not page_str.isdigit():
             await callback.answer(get_text("admin.handlers.page_not_found", language=lang), show_alert=True)
             return
+        current_page = int(page_str)
 
-        # Получаем заявки для текущей страницы
-        requests = svc.page_active_requests(
-            (current_page - 1) * requests_per_page, requests_per_page
-        )
-
-        if not requests:
-            await callback.answer(get_text("admin.handlers.no_requests_on_page", language=lang), show_alert=True)
-            return
-        
-        items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-        
-        # Обновляем сообщение с новой страницей
-        from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-        new_keyboard = get_manager_request_list_kb(items, current_page, total_pages)
-        
-        await callback.message.edit_reply_markup(reply_markup=new_keyboard)
-        
+        text, markup = build_manager_list(AdminHandlerService(db), kind, current_page, lang)
+        await edit_quiet(callback, text, markup)
+        await callback.answer()
         logger.info(f"Показана страница {current_page} заявок менеджеру {callback.from_user.id}")
         
     except Exception as e:

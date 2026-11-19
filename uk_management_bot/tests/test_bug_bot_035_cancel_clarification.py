@@ -128,7 +128,7 @@ async def test_render_helper_never_answers_and_ignores_callback_data():
     db = MagicMock()
     # request lookup returns None → fallback active-list branch, empty list.
     db.query.return_value.filter.return_value.first.return_value = None
-    db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    db.query.return_value.filter.return_value.order_by.return_value.order_by.return_value.count.return_value = 0
 
     # Must not raise (no IndexError from parsing callback.data).
     await admin._render_manager_request_list(callback, db, "250528-001", "ru")
