@@ -30,6 +30,7 @@ class Outgoing:
     chat_id: int
     text: str
     kind: str  # dm | staff_group | manager | residents_group — только для логов
+    reply_markup: object = None  # inline-кнопки (дайджест менеджерам); None — без них
 
 
 def resolve_staff_group(db: Session) -> Optional[int]:
@@ -65,7 +66,8 @@ async def deliver(bot, message: Outgoing) -> bool:
     """Отправка без БД; сбой логируется, не бросается (BUG-BOT-036)."""
     from uk_management_bot.services.notification_service.channel import send_to_user
 
-    ok = await send_to_user(bot, message.chat_id, message.text)
+    ok = await send_to_user(bot, message.chat_id, message.text,
+                            reply_markup=message.reply_markup)
     if not ok:
         logger.warning("ai_manager.channels: %s to %s not delivered", message.kind, message.chat_id)
     return ok

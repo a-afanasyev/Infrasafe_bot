@@ -2533,6 +2533,12 @@
       "purchase_engineer": "💰 <b>Закуп по заявке #{request_number}</b>\n📂 {category}\n📍 {address}\n📦 Нужно: {materials}",
       "repeated_return": "🔁 <b>Заявку #{request_number} вернули на доработку уже в {count}-й раз</b>\n📂 {category}\n📍 {address}\nСтоит разобраться в причине."
     },
+    "manager": {
+      "review": "🔎 <b>Работа по заявке #{request_number} выполнена — ждёт вашей проверки</b>\n📂 {category}\n📍 {address}",
+      "returned": "↩️ <b>Житель вернул работу по заявке #{request_number}</b>\n📂 {category}\n📍 {address}",
+      "unassigned": "🆕 <b>Заявка #{request_number} без исполнителя</b>\n📂 {category}\n📍 {address}\n📝 {description}",
+      "already_handled": "Уже обработано: {status}"
+    },
     "executor_problem": {
       "message": "⚠️ <b>Проблема по заявке #{request_number}</b>\n\n👷 Исполнитель: {executor}\n📍 {address}\n\n❗ {problem}{details}",
       "details": "\n💬 {text}",

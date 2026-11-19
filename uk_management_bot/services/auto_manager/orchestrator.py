@@ -97,6 +97,12 @@ _NOTIFY_TTL = timedelta(hours=12)
 # менеджерам, а дедуп в памяти (12 ч) истекал к следующему вечеру.
 _MAX_REQUEST_AGE = timedelta(hours=24)
 
+# Карточку «без исполнителя» менеджеры получают сразу при создании заявки
+# (`services/dispatch.auto_dispatch_created_request_*`). Дайджест «нет
+# дежурного» — напоминание о тех, что так и висят: по заявке моложе этого
+# порога он был бы дублем только что пришедшей карточки.
+_FIRST_NOTICE_GRACE = timedelta(minutes=15)
+
 # Over-fetch батч — ограниченный (не безусловный SELECT *), но с запасом на
 # случай, что несколько первых строк батча уже in-cooldown/taken. Используется
 # И phase1 (forward-scan), и phase2 (wrap-around): если бы phase1 брал ровно
@@ -520,6 +526,12 @@ class AutoManagerOrchestrator:
         last_notified = self._notified.get(req.request_number)
         if last_notified is not None and now - last_notified < _NOTIFY_TTL:
             return
+        created = req.created_at
+        if created is not None:
+            # sqlite отдаёт naive, PostgreSQL — aware: сравниваем в одной форме.
+            age = now.replace(tzinfo=None) - created.replace(tzinfo=None)
+            if age < _FIRST_NOTICE_GRACE:
+                return
 
         # AUD6-P2-14: список менеджеров — один раз на тик, а не на каждую
         # «нет дежурного»-заявку (list_approved_users — полная выборка).

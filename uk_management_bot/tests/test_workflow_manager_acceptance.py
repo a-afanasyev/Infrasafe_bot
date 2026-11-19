@@ -312,8 +312,9 @@ class TestNotificationKeySubstitution:
         assert [k for _, k, _, _ in targets] == \
             ["notifications.workflow.accepted_by_manager"]
         targets = self._targets(ACCEPTANCE_MODE_MANAGER, Action.EXECUTOR_COMPLETE)
+        # первой — карточка проверки менеджерам, затем жительский текст
         assert [k for _, k, _, _ in targets] == \
-            ["notifications.workflow.executed_staff"]
+            ["notifications.manager.review", "notifications.workflow.executed_staff"]
 
     def test_resident_mode_keys_unchanged(self):
         targets = self._targets(ACCEPTANCE_MODE_RESIDENT, Action.MANAGER_CONFIRM)

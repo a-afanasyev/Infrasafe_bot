@@ -112,6 +112,8 @@ def _age(minutes: int, lang: str = "ru") -> str:
 
 
 def _flush_manager_digest(plan: _Plan) -> None:
+    from uk_management_bot.utils.manager_cards import open_requests_markup
+
     if not plan.manager_lines or not plan.manager_ids:
         return
     chunks, cur = [], ""
@@ -123,7 +125,10 @@ def _flush_manager_digest(plan: _Plan) -> None:
     chunks.append(cur)
     for tg_id in plan.manager_ids:
         for chunk in chunks:
-            plan.messages.append(Outgoing(tg_id, chunk, "manager"))
+            # Кнопка на каждую заявку куска: менеджер открывает карточку и решает
+            # с телефона, а не ищет номер по спискам.
+            plan.messages.append(Outgoing(
+                tg_id, chunk, "manager", reply_markup=open_requests_markup(chunk)))
 
 
 class AiSlaWatchdog:

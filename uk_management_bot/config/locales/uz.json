@@ -2534,6 +2534,12 @@
       "purchase_engineer": "💰 <b>#{request_number} ariza bo'yicha xarid</b>\n📂 {category}\n📍 {address}\n📦 Kerak: {materials}",
       "repeated_return": "🔁 <b>#{request_number} ariza {count}-marta qayta ishlashga qaytarildi</b>\n📂 {category}\n📍 {address}\nSababini ko'rib chiqish kerak."
     },
+    "manager": {
+      "review": "🔎 <b>#{request_number} arizasi bo‘yicha ish bajarildi — tekshiruvingizni kutmoqda</b>\n📂 {category}\n📍 {address}",
+      "returned": "↩️ <b>Arizachi #{request_number} arizasi bo‘yicha ishni qaytardi</b>\n📂 {category}\n📍 {address}",
+      "unassigned": "🆕 <b>#{request_number} arizasi ijrochisiz qoldi</b>\n📂 {category}\n📍 {address}\n📝 {description}",
+      "already_handled": "Allaqachon ko‘rib chiqilgan: {status}"
+    },
     "executor_problem": {
       "message": "⚠️ <b>#{request_number} arizasi bo‘yicha muammo</b>\n\n👷 Ijrochi: {executor}\n📍 {address}\n\n❗ {problem}{details}",
       "details": "\n💬 {text}",

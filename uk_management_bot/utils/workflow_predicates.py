@@ -31,6 +31,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
+    REQUEST_STATUS_NEW,
     REQUEST_STATUS_RETURNED,
 )
 
@@ -219,6 +220,13 @@ def pending_or_in_progress_clause() -> ColumnElement:
 # они разъехались бы молча — кнопка предлагалась бы там, где команда уже не
 # проходит, или наоборот пряталась там, где проходит.
 # ---------------------------------------------------------------------------
+
+def is_unassigned_new(request) -> bool:
+    """«Новая» и никому не назначена — решать должен менеджер (карточка
+    «без исполнителя»). Групповое назначение исполнителя не даёт: заявка в
+    пуле дежурных, но конкретного человека у неё нет."""
+    return request.status == REQUEST_STATUS_NEW and request.executor_id is None
+
 
 def is_reassignable(request) -> bool:
     """Канон пускает смену исполнителя из текущего состояния заявки."""

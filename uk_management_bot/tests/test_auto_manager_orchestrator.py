@@ -116,6 +116,12 @@ def _shift(db, sid, user_id, *, status="active", specs=None, start=None, end=Non
     return s
 
 
+# Заявке моложе 15 минут дайджест «нет дежурного» не шлётся: карточку «без
+# исполнителя» менеджеры получили при создании. Тесты дайджеста работают с
+# заявками, которые уже успели повисеть.
+SETTLED = FIXED_NOW - timedelta(hours=1)
+
+
 def _group_request(db, number, *, specialization=SPECIALIZATION, created_at=None,
                     created_by=SYSTEM_USER_ID, category="plumbing", address="Тестовый адрес"):
     """«В работе» + активное непривязанное групповое назначение (main-очередь)."""
@@ -123,7 +129,7 @@ def _group_request(db, number, *, specialization=SPECIALIZATION, created_at=None
         request_number=number, user_id=APPLICANT_ID, category=category,
         description="desc", status=REQUEST_STATUS_IN_PROGRESS, executor_id=None,
         assignment_type="group", assigned_group=specialization,
-        address=address, created_at=created_at or FIXED_NOW,
+        address=address, created_at=created_at or SETTLED,
     )
     db.add(r)
     db.add(RequestAssignment(
@@ -141,7 +147,7 @@ def _residual_request(db, number, *, category="plumbing", created_at=None):
         request_number=number, user_id=APPLICANT_ID, category=category,
         description="desc", status=REQUEST_STATUS_NEW, executor_id=None,
         assignment_type=None, assigned_group=None,
-        address="Тестовый адрес", created_at=created_at or FIXED_NOW,
+        address="Тестовый адрес", created_at=created_at or SETTLED,
     )
     db.add(r)
     db.commit()
@@ -514,7 +520,7 @@ async def test_anti_starvation_cursor_visits_every_no_duty_request(env, monkeypa
     numbers = [f"260723-{i:03d}" for i in range(1, 10)]
     for i, number in enumerate(numbers):
         _group_request(db, number, specialization="obscure_spec",
-                       created_at=FIXED_NOW + timedelta(seconds=i))
+                       created_at=SETTLED + timedelta(seconds=i))
     # Ни одного исполнителя со специализацией "obscure_spec" — все 9 всегда no-duty.
 
     current = {"now": FIXED_NOW}
@@ -565,7 +571,7 @@ async def test_anti_starvation_phase2_reclaims_after_cooldown_expiry(env, monkey
     numbers = [f"260723-{i:03d}" for i in range(1, 7)]
     for i, number in enumerate(numbers):
         _group_request(db, number, specialization="obscure_spec",
-                       created_at=FIXED_NOW + timedelta(seconds=i))
+                       created_at=SETTLED + timedelta(seconds=i))
     # Ни одного исполнителя со специализацией "obscure_spec" — все 6 всегда no-duty.
 
     current = {"now": FIXED_NOW}
@@ -652,11 +658,11 @@ async def test_run_once_splits_slots_between_main_and_residual_same_tick(env, mo
     # реального назначения, только cooldown-запись + уведомление).
     main_numbers = [f"260723-{300 + i:03d}" for i in range(1, 11)]  # 10 > 6 main_slots
     for i, number in enumerate(main_numbers):
-        _group_request(db, number, created_at=FIXED_NOW + timedelta(seconds=i))
+        _group_request(db, number, created_at=SETTLED + timedelta(seconds=i))
 
     residual_numbers = [f"260723-{400 + i:03d}" for i in range(1, 11)]  # 10 > 2 residual_slots
     for i, number in enumerate(residual_numbers):
-        _residual_request(db, number, created_at=FIXED_NOW + timedelta(seconds=i))
+        _residual_request(db, number, created_at=SETTLED + timedelta(seconds=i))
 
     fake_bot = FakeBot()
     orchestrator = AutoManagerOrchestrator(bot=fake_bot)
@@ -726,7 +732,7 @@ async def test_no_duty_is_one_digest_per_manager_not_a_message_per_request(env, 
     m2 = _manager(db, 3, 2003, language="uz")
     numbers = ["260723-201", "260723-202", "260723-203"]
     for i, number in enumerate(numbers):
-        _group_request(db, number, created_at=FIXED_NOW - timedelta(minutes=i))
+        _group_request(db, number, created_at=SETTLED - timedelta(minutes=i))
     # Ни одного исполнителя вовсе.
 
     fake_bot = FakeBot()
@@ -765,3 +771,21 @@ async def test_requests_older_than_a_day_are_left_to_a_human_manager(env, monkey
     text = fake_bot.sent[0][1]
     assert "260723-301" in text
     assert "260601-001" not in text and "260601-002" not in text
+
+
+@pytest.mark.asyncio
+async def test_fresh_request_is_not_repeated_in_the_no_duty_digest(env, monkeypatch):
+    """Карточку «без исполнителя» менеджеры получают при создании заявки —
+    дайджест по заявке моложе 15 минут был бы её дублем."""
+    db, TestSessionLocal = env
+    _always_active_config(db)
+    monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
+    _manager(db, 2, 2002)
+    _group_request(db, "260723-301", created_at=FIXED_NOW - timedelta(minutes=5))
+    _group_request(db, "260723-302", created_at=FIXED_NOW - timedelta(minutes=40))
+
+    fake_bot = FakeBot()
+    await AutoManagerOrchestrator(bot=fake_bot).run_once()
+
+    assert len(fake_bot.sent) == 1
+    assert "260723-302" in fake_bot.sent[0][1] and "260723-301" not in fake_bot.sent[0][1]

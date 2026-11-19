@@ -30,6 +30,7 @@ from uk_management_bot.keyboards.requests import (
     resolve_category_key,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 from uk_management_bot.services.completion_media import get_completion_media_entries
@@ -49,6 +50,35 @@ logger = logging.getLogger(__name__)
 
 
 # ===== ОБРАБОТЧИКИ ПРОСМОТРА ЗАЯВОК ДЛЯ МЕНЕДЖЕРОВ =====
+
+def _current_status_label(db: Session, request_number: str, lang: str) -> str:
+    """Sync-юнит: подпись текущего статуса заявки (под `run_db`)."""
+    request = AdminHandlerService(db).get_request_by_number(request_number)
+    return get_status_display(request.status, language=lang) if request else "—"
+
+
+async def _answer_already_handled(callback: CallbackQuery, request_number: str, lang: str,
+                                  *, _db=None) -> None:
+    """Канон отказал в переходе — значит, заявку уже кто-то обработал.
+
+    Карточку-решение получают все менеджеры: один подтвердил, второй жмёт ту же
+    кнопку на своей копии. Вместо общего «ошибка подтверждения» — что с заявкой
+    сейчас, а устаревшие кнопки заменяются одной «Открыть»: повторное нажатие
+    не должно снова вести в отказ.
+    """
+    status = await run_db(lambda s: _current_status_label(s, request_number, lang), db=_db)
+    await callback.answer(
+        get_text("notifications.manager.already_handled", language=lang, status=status),
+        show_alert=True)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text=get_text("notifications.workflow.btn_open_request", language=lang),
+                callback_data=f"mview_{request_number}")]]))
+    except TelegramAPIError as exc:  # отказ уже показан; кнопки — косметика
+        logger.info("Кнопки устаревшей карточки %s не обновлены: %s",
+                    request_number, type(exc).__name__)
+
 
 def _back_row(request_number: str, back, lang: str) -> list:
     """«Назад к списку»: на ту же страницу, если карточку открыли из списка."""
@@ -387,7 +417,7 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_CONFIRM отклонён для {request_number}: {e}")
-            await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
+            await _answer_already_handled(callback, request_number, lang)
             return
 
         # Best-effort post-commit (потеря допустима, PR0 Р7): уведомления + правка.
@@ -489,7 +519,7 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_FORCE_ACCEPT (reconfirm) отклонён для {request_number}: {e}")
-            await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
+            await _answer_already_handled(callback, request_number, lang)
             return
 
         # Best-effort post-commit (PR0 Р7): уведомления + правка сообщения.

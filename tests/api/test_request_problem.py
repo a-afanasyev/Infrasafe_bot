@@ -198,6 +198,10 @@ async def test_notify_managers_in_their_language_escaped(db_session, db_session_
     assert "Ichkariga kiritishmadi" in uz
     assert "&lt;b&gt;дверь&lt;/b&gt;" in ru and "<b>дверь</b>" not in ru
     assert "&lt;Тест&gt;" in ru
+    # карточка с кнопками решения: переназначить / открыть заявку
+    markup = sent[0][2]["reply_markup"]
+    callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+    assert f"req_reassign_menu_{NUMBER}" in callbacks and f"mview_{NUMBER}" in callbacks
     assert all(kw.get("parse_mode") == "HTML" for _, _, kw in sent)
 
 

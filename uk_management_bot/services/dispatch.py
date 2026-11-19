@@ -409,6 +409,74 @@ async def auto_dispatch_new_request_async(request_number: str,
     return DispatchResult("grouped", spec)
 
 
+# Исходы диспетча, после которых заявка осталась «Новой» без человека и решать
+# должен менеджер. `no_engineer` сюда не входит: о нём менеджеров уведомляет
+# сверка `engineering_reconcile` (одна точка со своим дедупом).
+_NEEDS_MANAGER = frozenset({"no_spec", "disabled", "failed", "grouped"})
+
+
+def auto_dispatch_created_request_sync(request_number: str, category: Optional[str],
+                                       **kwargs) -> DispatchResult:
+    """Диспетч ТОЛЬКО ЧТО СОЗДАННОЙ заявки (бот-путь) + карточка менеджерам,
+    если исполнителя не нашлось.
+
+    Повторные диспетчи (смена категории, сверка) зовут
+    `auto_dispatch_new_request_sync` напрямую и карточку не шлют: менеджер уже
+    знает о заявке, второй «новой» она для него не становится.
+    """
+    result = auto_dispatch_new_request_sync(request_number, category, **kwargs)
+    if getattr(result, "kind", None) in _NEEDS_MANAGER:
+        _notify_unassigned_sync(request_number)
+    return result
+
+
+async def auto_dispatch_created_request_async(
+        request_number: str, category: Optional[str], *,
+        schedule_notify: Optional[Callable[..., Any]] = None, **kwargs) -> DispatchResult:
+    """API/TWA-зеркало `auto_dispatch_created_request_sync`.
+
+    ``schedule_notify`` (BackgroundTasks.add_task) откладывает и карточку —
+    Telegram уходит после ответа ручки, как и уведомление о назначении.
+    """
+    from uk_management_bot.services import workflow_notifications
+
+    result = await auto_dispatch_new_request_async(
+        request_number, category, schedule_notify=schedule_notify, **kwargs)
+    if getattr(result, "kind", None) not in _NEEDS_MANAGER:
+        return result
+    if schedule_notify is not None:
+        schedule_notify(workflow_notifications.notify_managers_unassigned_detached, request_number)
+        return result
+    try:
+        await workflow_notifications.notify_managers_unassigned_detached(request_number)
+    except Exception as e:  # карточка не вправе ронять создание заявки
+        logger.warning("[DISPATCH] карточка «без исполнителя» %s пропущена: %s",
+                       request_number, type(e).__name__)
+    return result
+
+
+def _notify_unassigned_sync(request_number: str) -> None:
+    """Карточка «без исполнителя» менеджерам (best-effort, бот-путь)."""
+    import asyncio
+
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.services.notification_service import _get_shared_bot
+    from uk_management_bot.services.workflow_notifications import (
+        collect_unassigned_messages_sync,
+        send_notify_messages,
+    )
+    try:
+        session = SessionLocal()
+        try:
+            messages = collect_unassigned_messages_sync(session, request_number)
+        finally:
+            session.close()  # сессия закрыта до сети
+        asyncio.run(send_notify_messages(_get_shared_bot(), messages))
+    except Exception as e:  # карточка не вправе ронять создание заявки
+        logger.warning("[DISPATCH] карточка «без исполнителя» %s пропущена: %s",
+                       request_number, type(e).__name__)
+
+
 def _no_engineer(request_number: str, spec: Optional[str]) -> DispatchResult:
     """«Инженерный разбор» без инженера: заявка остаётся «Новая» БЕЗ группы —
     группа `repair` отдала бы эскалацию разнорабочему, чей ремонт и не помог.
