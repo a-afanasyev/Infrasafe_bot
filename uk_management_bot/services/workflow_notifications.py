@@ -506,7 +506,7 @@ def _load_users_sync(db: Session, wanted_ids: set[int]) -> list[User]:
     return [u for u in users if u.telegram_id]
 
 
-def _drop_already_addressed(action: Action, recipients: list, seen: dict) -> list:
+def _drop_already_addressed(action: Action, text_key: str, recipients: list, seen: dict) -> list:
     """Убрать тех, кому по этому действию уже адресовано более раннее задание.
 
     `_resolve_targets` снимает пересечения только адресных ролей (заявитель/
@@ -514,6 +514,11 @@ def _drop_already_addressed(action: Action, recipients: list, seen: dict) -> lis
     менеджер-заявитель получал бы и карточку решения, и жительский текст.
     Порядок заданий = порядок спецификаций в матрице: побеждает первое.
     """
+    if text_key == _REPEATED_RETURN_KEY:
+        # «Вернули уже в N-й раз» — дополнение к матрице со своим содержанием
+        # (счётчик возвратов): инженер с правом менеджера получает и карточку
+        # решения, и это предупреждение.
+        return recipients
     already = seen.setdefault(action, set())
     fresh = [r for r in recipients if r.telegram_id not in already]
     already.update(r.telegram_id for r in fresh)
@@ -565,7 +570,7 @@ async def _collect_async(
         try:
             wanted_ids = await _wanted_with_residents_async(db, request, wanted_ids)
             recipients = _drop_already_addressed(
-                action, await _recipients_async(db, wanted_ids, audience), seen)
+                action, text_key, await _recipients_async(db, wanted_ids, audience), seen)
         except Exception as e:
             logger.warning(
                 "Уведомление по действию %s для заявки %s не отправлено: %s",
@@ -715,7 +720,7 @@ async def dispatch_notify_intents_sync(
         try:
             wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
             recipients = _drop_already_addressed(
-                action, _recipients_sync(db, wanted_ids, audience), seen)
+                action, text_key, _recipients_sync(db, wanted_ids, audience), seen)
             if not recipients:
                 continue
             sent += await _send_to_recipients(
@@ -763,7 +768,7 @@ def collect_notify_messages_sync(
         try:
             wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
             for user in _drop_already_addressed(
-                    action, _recipients_sync(db, wanted_ids, audience), seen):
+                    action, text_key, _recipients_sync(db, wanted_ids, audience), seen):
                 language = user.language or "ru"
                 messages.append(NotifyMessage(
                     user.telegram_id,

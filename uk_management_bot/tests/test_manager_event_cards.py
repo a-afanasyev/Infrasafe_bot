@@ -351,3 +351,18 @@ async def test_reassign_on_a_stale_card_says_already_handled(db):
     finally:
         shared.already_handled_text = original
     callback.answer.assert_awaited_once_with(text, show_alert=True)
+
+
+def test_engineer_manager_still_gets_the_repeated_return_notice(db):
+    """Дедуп «одно сообщение на действие» не съедает предупреждение о повторном
+    возврате: у него своё содержание (счётчик), а не тот же факт другими словами."""
+    _request(db, "Возвращена", return_reason="Опять течёт", return_count=2)
+    db.query(User).filter(User.id == 1).update({"roles": '["manager", "engineer"]'})
+    db.commit()
+    intent = SimpleNamespace(kind="notify",
+                             data={"action": "applicant_return", "repeated_return": True})
+
+    got = _by_chat(collect_notify_messages_sync(db, NUM, [intent]))
+
+    assert len(got[MANAGER_TG]) == 2
+    assert sum(m.reply_markup is not None for m in got[MANAGER_TG]) == 1  # карточка решения
