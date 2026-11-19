@@ -35,7 +35,7 @@ from .shared import (
 )
 
 from .lists import _render_manager_request_list
-from .shared import delete_admin_ids
+from .shared import close_prompt, delete_admin_ids, remember_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +122,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
 
         # Сохраняем номер заявки в состоянии для отклонения
         await state.update_data(deny_request_number=request_number)
+        await remember_prompt(callback, state)
         
         # Устанавливаем состояние ожидания причины отклонения
         await state.set_state(ManagerStates.cancel_reason)
@@ -160,6 +161,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         
         # Сохраняем номер заявки в состоянии
         await state.update_data(request_number=request_number)
+        await remember_prompt(callback, state)
         
         # Запрашиваем текст уточнения
         await callback.message.edit_text(
@@ -533,12 +535,13 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
 
 
         # Подтверждаем менеджеру
-        await message.answer(
-            get_text("admin.handlers.clarification_sent", language=lang).format(
-                request_number=request.request_number,
-                text_preview=html.escape(clarification_text[:100]) + ('...' if len(clarification_text) > 100 else '')
-            )
+        done = get_text("admin.handlers.clarification_sent", language=lang).format(
+            request_number=request.request_number,
+            text_preview=html.escape(clarification_text[:100]) + ('...' if len(clarification_text) > 100 else '')
         )
+        # Итог — в исходное сообщение (бывшую карточку), новым — только если не вышло.
+        if not await close_prompt(message, state, done):
+            await message.answer(done)
         
         # Очищаем состояние
         await state.clear()
@@ -626,6 +629,9 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
             await state.clear()
             return
 
+        # Подсказка с «Отменой» больше не нужна; сам итог идёт новым сообщением —
+        # он возвращает меню менеджера, а reply-клавиатуру правкой не передать.
+        await close_prompt(message, state)
         await message.answer(
             get_text("admin.handlers.request_denied", language=lang).format(
                 request_number=request_number,

@@ -30,7 +30,6 @@ from uk_management_bot.keyboards.requests import (
     resolve_category_key,
 )
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.session import run_db
 from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 from uk_management_bot.services.completion_media import get_completion_media_entries
@@ -44,18 +43,12 @@ from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 from ._router import router
 from .elevator_hint import send_elevator_hint
 from .lists import _MANAGER_LISTS, build_manager_list, edit_quiet
-from .shared import delete_admin_ids
+from .shared import already_handled_text, close_prompt, delete_admin_ids, remember_prompt
 
 logger = logging.getLogger(__name__)
 
 
 # ===== ОБРАБОТЧИКИ ПРОСМОТРА ЗАЯВОК ДЛЯ МЕНЕДЖЕРОВ =====
-
-def _current_status_label(db: Session, request_number: str, lang: str) -> str:
-    """Sync-юнит: подпись текущего статуса заявки (под `run_db`)."""
-    request = AdminHandlerService(db).get_request_by_number(request_number)
-    return get_status_display(request.status, language=lang) if request else "—"
-
 
 async def _answer_already_handled(callback: CallbackQuery, request_number: str, lang: str,
                                   *, _db=None) -> None:
@@ -66,10 +59,8 @@ async def _answer_already_handled(callback: CallbackQuery, request_number: str, 
     сейчас, а устаревшие кнопки заменяются одной «Открыть»: повторное нажатие
     не должно снова вести в отказ.
     """
-    status = await run_db(lambda s: _current_status_label(s, request_number, lang), db=_db)
     await callback.answer(
-        get_text("notifications.manager.already_handled", language=lang, status=status),
-        show_alert=True)
+        await already_handled_text(request_number, lang, _db=_db), show_alert=True)
     try:
         await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
@@ -594,6 +585,7 @@ async def handle_manager_return_to_work(callback: CallbackQuery, state: FSMConte
         )
 
         await state.update_data(return_to_work_number=request_number)
+        await remember_prompt(callback, state)
         await state.set_state(ManagerAcceptanceStates.awaiting_return_to_work_reason)
 
         logger.info(f"Запрошена причина возврата в работу по заявке {request_number}")
@@ -658,7 +650,10 @@ async def handle_return_to_work_reason(message: Message, state: FSMContext, db: 
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_RETURN_TO_WORK отклонён для {request_number}: {e}")
-            await message.answer(get_text("admin.handlers.error_changing_status", language=lang))
+            # Канон отказал — заявку уже обработали: пишем это в ту же подсказку.
+            stale = await already_handled_text(request_number, lang)
+            if not await close_prompt(message, state, stale):
+                await message.answer(stale)
             await state.clear()
             return
 
@@ -669,10 +664,11 @@ async def handle_return_to_work_reason(message: Message, state: FSMContext, db: 
         await notify_channel_status_changed(
             message.bot, request, outcome.old_status, outcome.public_status)
 
-        await message.answer(
-            get_text("admin.handlers.request_returned_to_work", language=lang).format(
-                request_number=request_number)
-        )
+        done = get_text("admin.handlers.request_returned_to_work", language=lang).format(
+            request_number=request_number)
+        # Итог — в исходное сообщение (бывшую карточку), новым — только если не вышло.
+        if not await close_prompt(message, state, done):
+            await message.answer(done)
         await state.clear()
 
         logger.info(f"Заявка {request_number} возвращена в работу менеджером {user.id} (canon)")

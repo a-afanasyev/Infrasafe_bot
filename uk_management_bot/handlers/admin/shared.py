@@ -1,7 +1,9 @@
 """Разделяемое для admin-пакета: SSOT-константы кнопок, ManagerStates, auto_assign_request_by_category (AUD3-06)."""
 import html
 import os
+from typing import Optional
 
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.state import StatesGroup, State
 from sqlalchemy.orm import Session
 
@@ -9,7 +11,9 @@ from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.constants.categories import get_specialization_for_category
 
 import logging
+from uk_management_bot.database.session import run_db
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.status_display import get_status_display
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
 from uk_management_bot.utils.twa_links import executor_task_open_markup
 from uk_management_bot.database.models.user import User
@@ -226,6 +230,56 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения заявки {request.request_number}: {e}")
         return ASSIGN_ERROR
+
+
+PROMPT_MESSAGE_KEY = "prompt_message_id"
+
+
+async def remember_prompt(callback, state) -> None:
+    """Запомнить сообщение, в котором бот спросил причину/текст.
+
+    Карточка заявки (или карточка-уведомление) при нажатии «Вернуть в работу»,
+    «Уточнить», «Отклонить» превращается в подсказку с кнопкой «Отмена». Её id
+    нужен, чтобы после ввода текста записать итог в НЕЁ ЖЕ, а не оставить
+    висеть с кнопкой отмены уже завершённого действия.
+    """
+    await state.update_data(**{PROMPT_MESSAGE_KEY: callback.message.message_id})
+
+
+async def close_prompt(message, state, text: Optional[str] = None) -> bool:
+    """Закрыть подсказку: записать в неё итог (или просто снять кнопки).
+
+    Звать ДО `state.clear()`. True — подсказка обновлена, отдельное сообщение с
+    тем же текстом слать не нужно; False — подсказки нет или Telegram отказал
+    (сообщение удалено/слишком старое), вызывающий отвечает как раньше.
+    """
+    prompt_id = (await state.get_data()).get(PROMPT_MESSAGE_KEY)
+    if not prompt_id:
+        return False
+    try:
+        if text is None:
+            await message.bot.edit_message_reply_markup(
+                chat_id=message.chat.id, message_id=prompt_id, reply_markup=None)
+        else:
+            await message.bot.edit_message_text(
+                text=text, chat_id=message.chat.id, message_id=prompt_id)
+        return True
+    except TelegramAPIError as exc:
+        logger.info("Подсказка %s не обновлена: %s", prompt_id, type(exc).__name__)
+        return False
+
+
+def current_status_label(db: Session, request_number: str, lang: str) -> str:
+    """Sync-юнит (под `run_db`): подпись текущего статуса заявки."""
+    request = AdminHandlerService(db).get_request_by_number(request_number)
+    return get_status_display(request.status, language=lang) if request else "—"
+
+
+async def already_handled_text(request_number: str, lang: str, *, _db=None) -> str:
+    """«Уже обработано: <статус>» — ответ на действие, которое канон отклонил,
+    потому что заявку успел обработать кто-то другой."""
+    status = await run_db(lambda s: current_status_label(s, request_number, lang), db=_db)
+    return get_text("notifications.manager.already_handled", language=lang, status=status)
 
 
 def delete_admin_ids() -> frozenset:

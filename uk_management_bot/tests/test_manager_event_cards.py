@@ -276,3 +276,78 @@ async def test_rejected_decision_is_reported_as_already_handled(monkeypatch, han
     stale.assert_awaited_once()
     assert stale.await_args.args[1] == NUM
     callback.message.edit_text.assert_not_awaited()
+
+
+# --- итог диалога с вводом текста — в исходное сообщение ------------------------
+
+class _State:
+    def __init__(self, data=None):
+        self.data = dict(data or {})
+
+    async def get_data(self):
+        return dict(self.data)
+
+    async def update_data(self, **kwargs):
+        self.data.update(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_prompt_is_remembered_and_closed_with_the_result():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from uk_management_bot.handlers.admin import shared
+
+    state = _State()
+    callback = MagicMock()
+    callback.message.message_id = 777
+    await shared.remember_prompt(callback, state)
+
+    message = MagicMock()
+    message.chat.id = MANAGER_TG
+    message.bot.edit_message_text = AsyncMock()
+    assert await shared.close_prompt(message, state, "Заявка возвращена в работу") is True
+    message.bot.edit_message_text.assert_awaited_once_with(
+        text="Заявка возвращена в работу", chat_id=MANAGER_TG, message_id=777)
+
+
+@pytest.mark.asyncio
+async def test_close_prompt_falls_back_when_there_is_nothing_to_edit():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from aiogram.exceptions import TelegramBadRequest
+
+    from uk_management_bot.handlers.admin import shared
+
+    message = MagicMock()
+    message.chat.id = MANAGER_TG
+    message.bot.edit_message_text = AsyncMock(side_effect=TelegramBadRequest(
+        method=MagicMock(), message="Bad Request: message to edit not found"))
+    # подсказки не было вовсе (старый диалог) — вызывающий отвечает как раньше
+    assert await shared.close_prompt(message, _State(), "итог") is False
+    # подсказку удалили — тоже
+    assert await shared.close_prompt(
+        message, _State({shared.PROMPT_MESSAGE_KEY: 1}), "итог") is False
+
+
+@pytest.mark.asyncio
+async def test_reassign_on_a_stale_card_says_already_handled(db):
+    from unittest.mock import AsyncMock, MagicMock
+
+    from uk_management_bot.handlers.admin import reassignment, shared
+
+    _request(db, "Исполнено", manager_confirmed=True)
+    callback = MagicMock()
+    callback.answer = AsyncMock()
+
+    text = await shared.already_handled_text(NUM, "ru", _db=db)
+    assert text.startswith("Уже обработано") and "Исполнено" in text
+    # вердикт «статус не подходит» отвечает тем же текстом
+    shared_text = AsyncMock(return_value=text)
+    original = shared.already_handled_text
+    shared.already_handled_text = shared_text
+    try:
+        await reassignment._answer_verdict(
+            callback, reassignment.Preflight("bad_status", request_number=NUM), "ru")
+    finally:
+        shared.already_handled_text = original
+    callback.answer.assert_awaited_once_with(text, show_alert=True)
