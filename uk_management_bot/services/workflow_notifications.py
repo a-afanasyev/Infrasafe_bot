@@ -837,11 +837,15 @@ async def notify_managers_unassigned_detached(request_number: str) -> int:
             recipients = await _recipients_async(
                 session, set(), (MANAGERS[len(ACTION_AUDIENCE_PREFIX):],))
         messages = _unassigned_messages(request, recipients)
+        if not messages:
+            return 0
+        # Бот строится здесь же, под тем же перехватом: невалидный токен или
+        # сбой сети — не повод ронять фоновую задачу уже созданной заявки.
+        return await send_notify_messages(_get_shared_bot(), messages)
     except Exception as e:
-        logger.warning("карточка «без исполнителя» по %s не собрана: %s",
+        logger.warning("карточка «без исполнителя» по %s не отправлена: %s",
                        request_number, type(e).__name__)
         return 0
-    return await send_notify_messages(_get_shared_bot(), messages)
 
 
 async def send_notify_messages(bot, messages: list[tuple[int, str]]) -> int:
