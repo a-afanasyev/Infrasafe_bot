@@ -35,6 +35,7 @@ def _buttons(**kwargs) -> dict:
 
 
 def _disabled_texts(**kwargs) -> list[str]:
+    kwargs.setdefault("show_disabled", True)
     markup = get_manager_request_actions_keyboard(NUM, **kwargs)
     return [b.text for row in markup.inline_keyboard for b in row if b.disabled is not None]
 
@@ -91,7 +92,7 @@ def test_unavailable_actions_are_shown_disabled_not_hidden():
 
 
 def test_disabled_button_carries_no_action():
-    markup = get_manager_request_actions_keyboard(NUM, status=REQUEST_STATUS_NEW)
+    markup = get_manager_request_actions_keyboard(NUM, status=REQUEST_STATUS_NEW, show_disabled=True)
     greyed = [b for row in markup.inline_keyboard for b in row if b.disabled is not None]
     assert greyed and all(b.callback_data is None and b.url is None for b in greyed)
     # Telegram получает именно поле `disabled`, без callback_data
@@ -102,7 +103,7 @@ def test_disabled_button_carries_no_action():
 def test_card_with_nothing_to_do_has_no_grey_wall():
     """Архивная заявка: все действия недоступны — ряд из пяти серых кнопок
     бесполезен, не показываем ничего."""
-    markup = get_manager_request_actions_keyboard(NUM, status="Принято")
+    markup = get_manager_request_actions_keyboard(NUM, status="Принято", show_disabled=True)
     assert markup.inline_keyboard == []
 
 
@@ -111,3 +112,11 @@ def test_to_work_is_hidden_not_greyed_when_assigned():
     только запутала бы."""
     texts = _disabled_texts(status=REQUEST_STATUS_NEW, assigned=True)
     assert not any("В работу" in t for t in texts)
+
+
+def test_disabled_buttons_are_off_by_default():
+    """Живая проверка 2026-11-19: клиент Telegram, не знающий отключённых кнопок,
+    показывает ВСЁ сообщение «неподдерживаемым» — карточка заявки пропадает
+    целиком. Поэтому без явной настройки недоступные действия просто скрыты."""
+    markup = get_manager_request_actions_keyboard(NUM, status=REQUEST_STATUS_NEW)
+    assert all(b.disabled is None for row in markup.inline_keyboard for b in row)

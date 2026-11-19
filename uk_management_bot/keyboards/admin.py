@@ -187,6 +187,7 @@ def get_manager_request_actions_keyboard(
     status: Optional[str] = None,
     assigned: bool = False,
     can_delete: bool = False,
+    show_disabled: Optional[bool] = None,
 ) -> InlineKeyboardMarkup:
     """Действия менеджера с заявкой — только те, что канон пускает из ``status``.
 
@@ -196,9 +197,14 @@ def get_manager_request_actions_keyboard(
             назначением управляет строка «Переназначить».
         can_delete: удаление доступно только администраторам из ADMIN_USER_IDS —
             остальным кнопка вела бы в отказ.
+        show_disabled: рисовать недоступные действия серыми кнопками; None —
+            по настройке BOT_DISABLED_BUTTONS (по умолчанию выключено).
     """
+    from uk_management_bot.config.settings import settings
     from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
 
+    if show_disabled is None:
+        show_disabled = settings.BOT_DISABLED_BUTTONS
     builder = InlineKeyboardBuilder()
     buttons, available = [], 0
     for prefix, action, text_key, style in MANAGER_CARD_ACTIONS:
@@ -213,11 +219,14 @@ def get_manager_request_actions_keyboard(
                 RequestCallbackHelper.create_callback_data_with_request_number(prefix, request_number),
                 style,
             ))
-        else:
+        elif show_disabled:
             # Недоступное из этого статуса действие остаётся на месте серым
             # (Bot API 10.3): менеджер видит, что оно есть, но нажать нельзя —
             # и не получает окно-отказ. У `disabled` нет callback_data.
+            # Только по флагу BOT_DISABLED_BUTTONS: старый клиент Telegram
+            # показывает сообщение с такой кнопкой целиком «неподдерживаемым».
             buttons.append(InlineKeyboardButton(text=label, disabled=DisabledButton()))
+        # иначе недоступное действие просто не показывается
     if available:
         builder.add(*buttons)
     # Иначе (архивная заявка) — ничего: ряд из одних серых кнопок бесполезен.
