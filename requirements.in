@@ -1,5 +1,8 @@
 # Telegram Bot Framework
-aiogram>=3.0.0
+# >=3.31 — Bot API 10.3: `disabled` у inline-кнопок, кнопки в rich-сообщениях.
+# <3.32 — 3.32.0 несовместима: перечисления стали StrEnum, убраны `remove_unset`,
+# изменено экранирование ссылок, минимум Python 3.11. Поднимать отдельным PR.
+aiogram>=3.31,<3.32
 # F-06 (аудит 2026-07-11): floor против уязвимой 3.13.5 — aiohttp транзитивен
 # через aiogram, но advisories (multipart CRLF, HTTP parser, WS memory limits)
 # требуют явной нижней границы.
