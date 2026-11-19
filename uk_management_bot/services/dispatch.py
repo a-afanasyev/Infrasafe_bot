@@ -455,23 +455,48 @@ async def auto_dispatch_created_request_async(
     return result
 
 
-def _notify_unassigned_sync(request_number: str) -> None:
-    """Карточка «без исполнителя» менеджерам (best-effort, бот-путь)."""
+def _send_from_thread(messages: list) -> int:
+    """Разослать готовые сообщения ИЗ РАБОЧЕГО ПОТОКА. → число доставленных.
+
+    Sync-хуки создания заявки исполняются в потоке (`run_db`) и шлют через
+    `asyncio.run`, то есть в СВОЁМ цикле. Общий бот процесса для этого не
+    годится: его aiohttp-сессия привязана к основному циклу, и любой запрос из
+    другого падает «Timeout context manager should be used inside a task»
+    (живой прогон 2026-11-20: не доходило ни одно сообщение, заявка при этом
+    создавалась, ошибка оставалась только в логе). Поэтому здесь свой
+    короткоживущий бот, закрываемый сразу после рассылки.
+    """
     import asyncio
 
+    from uk_management_bot.config.settings import settings
+    from uk_management_bot.services import workflow_notifications
+    from uk_management_bot.utils import telegram_client
+
+    if not messages:
+        return 0
+
+    async def _send() -> int:
+        bot = telegram_client.build_bot(settings.BOT_TOKEN)
+        try:
+            return await workflow_notifications.send_notify_messages(bot, messages)
+        finally:
+            await bot.session.close()
+
+    return asyncio.run(_send())
+
+
+def _notify_unassigned_sync(request_number: str) -> None:
+    """Карточка «без исполнителя» менеджерам (best-effort, бот-путь)."""
     from uk_management_bot.database.session import SessionLocal
-    from uk_management_bot.services.notification_service import _get_shared_bot
-    from uk_management_bot.services.workflow_notifications import (
-        collect_unassigned_messages_sync,
-        send_notify_messages,
-    )
+    from uk_management_bot.services.workflow_notifications import collect_unassigned_messages_sync
+
     try:
         session = SessionLocal()
         try:
             messages = collect_unassigned_messages_sync(session, request_number)
         finally:
             session.close()  # сессия закрыта до сети
-        asyncio.run(send_notify_messages(_get_shared_bot(), messages))
+        _send_from_thread(messages)
     except Exception as e:  # карточка не вправе ронять создание заявки
         logger.warning("[DISPATCH] карточка «без исполнителя» %s пропущена: %s",
                        request_number, type(e).__name__)
@@ -493,22 +518,24 @@ def _notify_assigned_sync(request_number: str, outcome) -> None:
     пула свободных она уже ушла (`executor_id` не NULL), а создание заявки само
     исполнителей не уведомляет. До инварианта уведомлять было некого — группу
     видели все дежурные сразу.
-    """
-    import asyncio
 
+    Сбор сообщений — на короткой сессии, закрытой до сети; отправка — через
+    `_send_from_thread` (общий бот процесса из потока слать не может, см. там).
+    """
     from uk_management_bot.database.session import SessionLocal
-    from uk_management_bot.services.workflow_notifications import (
-        dispatch_notify_intents_sync,
-    )
-    session = SessionLocal()
+    from uk_management_bot.services.workflow_notifications import collect_notify_messages_sync
+
     try:
-        asyncio.run(dispatch_notify_intents_sync(
-            session, request_number, outcome.post_commit_intents))
+        session = SessionLocal()
+        try:
+            messages = collect_notify_messages_sync(
+                session, request_number, outcome.post_commit_intents)
+        finally:
+            session.close()
+        _send_from_thread(messages)
     except Exception as e:  # уведомление не вправе ронять назначение
         logger.warning("[DISPATCH] уведомление о назначении %s пропущено: %s",
-                       request_number, e)
-    finally:
-        session.close()
+                       request_number, type(e).__name__)
 
 
 async def _publish_updated(request_number: str) -> None:

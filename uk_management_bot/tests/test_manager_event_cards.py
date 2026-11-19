@@ -433,3 +433,45 @@ async def test_permission_refusal_is_not_reported_as_already_handled(monkeypatch
     stale.assert_not_awaited()
     callback.answer.assert_awaited_once()
     assert callback.answer.await_args.kwargs.get("show_alert") is True
+
+
+# --- отправка из рабочего потока: свой бот, не общий -----------------------------
+
+def test_thread_senders_never_reuse_the_shared_bot(monkeypatch):
+    """Найдено живым прогоном: sync-хуки создания заявки шлют из рабочего потока
+    через `asyncio.run`, а общий бот процесса привязан к основному циклу —
+    каждая отправка падала «Timeout context manager should be used inside a
+    task». Карточка «без исполнителя» и «вам назначена заявка» не доходили
+    никому, при этом заявка создавалась и ошибки видно не было."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from uk_management_bot.services import notification_service, workflow_notifications
+    from uk_management_bot.utils import telegram_client
+
+    shared = MagicMock(name="shared-bot-of-the-main-loop")
+    own = MagicMock(name="own-short-lived-bot")
+    own.session.close = AsyncMock()
+    used = []
+
+    async def fake_send(bot, messages):
+        used.append(bot)
+        return len(messages)
+
+    monkeypatch.setattr(notification_service, "_get_shared_bot", lambda: shared)
+    monkeypatch.setattr(telegram_client, "build_bot", lambda token, **kw: own)
+    monkeypatch.setattr(workflow_notifications, "send_notify_messages", fake_send)
+
+    assert dispatch._send_from_thread([(MANAGER_TG, "текст")]) == 1
+
+    assert used == [own]                       # общий бот основного цикла не тронут
+    own.session.close.assert_awaited_once()    # своя сессия закрыта
+
+
+def test_thread_sender_skips_the_network_when_there_is_nothing_to_send(monkeypatch):
+    from uk_management_bot.utils import telegram_client
+
+    def must_not_build(*args, **kwargs):
+        raise AssertionError("бот не должен создаваться ради пустой рассылки")
+
+    monkeypatch.setattr(telegram_client, "build_bot", must_not_build)
+    assert dispatch._send_from_thread([]) == 0
