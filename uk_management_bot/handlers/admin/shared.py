@@ -269,6 +269,23 @@ async def close_prompt(message, state, text: Optional[str] = None) -> bool:
         return False
 
 
+def is_stale_refusal(exc: Exception) -> bool:
+    """Канон отказал из-за СОСТОЯНИЯ заявки (её уже кто-то обработал), а не
+    из-за прав или данных команды.
+
+    Только на такой отказ уместно «Уже обработано». `NotAuthorized` (админ без
+    роли менеджера), `PayloadInvalid` и прочее — другая причина, и говорить
+    «уже обработано» про заявку, которую никто не трогал, значит соврать.
+    """
+    from uk_management_bot.utils.request_workflow.types import (
+        InvalidTransition,
+        RepeatConflict,
+        RepeatRejected,
+    )
+
+    return isinstance(exc, (InvalidTransition, RepeatRejected, RepeatConflict))
+
+
 def current_status_label(db: Session, request_number: str, lang: str) -> str:
     """Sync-юнит (под `run_db`): подпись текущего статуса заявки."""
     request = AdminHandlerService(db).get_request_by_number(request_number)

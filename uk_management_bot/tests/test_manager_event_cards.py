@@ -398,3 +398,38 @@ async def test_repeated_confirm_is_already_handled_without_side_effects(monkeypa
     callback.bot.send_message.assert_not_awaited()   # жителю второй раз не пишем
     notify.assert_not_awaited()
     callback.message.edit_text.assert_not_awaited()  # и «подтверждена» не рисуем
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("handler,data", [
+    ("handle_manager_confirm_completed", f"confirm_completed_{NUM}"),
+    ("handle_manager_reconfirm_completed", f"reconfirm_completed_{NUM}"),
+])
+async def test_permission_refusal_is_not_reported_as_already_handled(monkeypatch, handler, data):
+    """Найдено ревью: «Уже обработано» показывалось на ЛЮБОЙ отказ канона.
+    Админ без роли менеджера получает NotAuthorized — заявку никто не обрабатывал,
+    и отвечать ему «Уже обработано», убирая кнопки, значит соврать."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from uk_management_bot.handlers.admin import views
+    from uk_management_bot.services import workflow_runner
+    from uk_management_bot.utils.request_workflow import NotAuthorized
+
+    def refused(*args, **kwargs):
+        raise NotAuthorized("manager only")
+
+    stale = AsyncMock()
+    monkeypatch.setattr(workflow_runner, "run_command_sync", refused)
+    monkeypatch.setattr(views, "_answer_already_handled", stale)
+    callback = MagicMock()
+    callback.data = data
+    callback.from_user.id = MANAGER_TG
+    callback.answer = AsyncMock()
+    callback.message.edit_text = AsyncMock()
+
+    await getattr(views, handler)(callback, MagicMock(), roles=["admin"],
+                                  user=SimpleNamespace(id=1), language="ru")
+
+    stale.assert_not_awaited()
+    callback.answer.assert_awaited_once()
+    assert callback.answer.await_args.kwargs.get("show_alert") is True

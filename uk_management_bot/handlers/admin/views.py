@@ -49,7 +49,13 @@ from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 from ._router import router
 from .elevator_hint import send_elevator_hint
 from .lists import _MANAGER_LISTS, build_manager_list, edit_quiet
-from .shared import already_handled_text, close_prompt, delete_admin_ids, remember_prompt
+from .shared import (
+    already_handled_text,
+    close_prompt,
+    delete_admin_ids,
+    is_stale_refusal,
+    remember_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +441,10 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_CONFIRM отклонён для {request_number}: {e}")
-            await _answer_already_handled(callback, request_number, lang)
+            if is_stale_refusal(e):
+                await _answer_already_handled(callback, request_number, lang)
+            else:
+                await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
             return
         if getattr(outcome, "no_op", False):
             # MANAGER_CONFIRM — no_op_if_same: заявка уже «Исполнено», канон
@@ -545,7 +554,10 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_FORCE_ACCEPT (reconfirm) отклонён для {request_number}: {e}")
-            await _answer_already_handled(callback, request_number, lang)
+            if is_stale_refusal(e):
+                await _answer_already_handled(callback, request_number, lang)
+            else:
+                await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
             return
 
         # Best-effort post-commit (PR0 Р7): уведомления + правка сообщения.
@@ -685,10 +697,12 @@ async def handle_return_to_work_reason(message: Message, state: FSMContext, db: 
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_RETURN_TO_WORK отклонён для {request_number}: {e}")
-            # Канон отказал — заявку уже обработали: пишем это в ту же подсказку.
-            stale = await already_handled_text(request_number, lang)
-            if not await close_prompt(message, state, stale):
-                await message.answer(stale)
+            # Заявку уже обработали — пишем это в ту же подсказку; иной отказ
+            # (права, данные) — прежним общим текстом.
+            refusal = (await already_handled_text(request_number, lang) if is_stale_refusal(e)
+                       else get_text("admin.handlers.error_changing_status", language=lang))
+            if not await close_prompt(message, state, refusal):
+                await message.answer(refusal)
             await state.clear()
             return
 
