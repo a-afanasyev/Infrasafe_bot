@@ -352,3 +352,67 @@ def test_dispatch_does_nothing_when_toggle_off(monkeypatch):
 
     mod.auto_dispatch_new_request_sync("260817-003", "plumbing", _db=MagicMock())
     assert called == [], "при выключенном автоназначении заявка не трогается вовсе"
+
+
+# ═══ «Уточнение» без исполнителя — не тупик (2026-11-19) ═══
+# ИИ-менеджер уводит заявку в «Уточнение» прямо из «Новой». CLARIFY_RESOLVED
+# оттуда отказывает (исполнителя нет), а MANAGER_ASSIGN не пускал из
+# «Уточнения» — менеджер не мог ни вернуть в работу, ни назначить.
+
+def test_manager_assigns_from_clarification_without_executor():
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+
+    res = _plan(_snap(REQUEST_STATUS_CLARIFICATION), Action.MANAGER_ASSIGN,
+                MANAGER, {"executor_id": EXECUTOR_ID})
+    fields = _patch_fields(res)
+    assert fields["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+    assert fields["executor_id"] == (Op.SET, EXECUTOR_ID)
+
+
+def test_reassign_from_clarification_moves_to_in_progress():
+    """Осознанно: смена исполнителя в «Уточнении» = вывод заявки в работу.
+
+    Отдельного «сменить, но оставить в уточнении» нет — назначение всегда ведёт
+    в «В работе». Тест держит это решением, а не случайностью.
+    """
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+
+    other = EXECUTOR_ID + 100
+    res = _plan(_snap(REQUEST_STATUS_CLARIFICATION, executor=EXECUTOR_ID),
+                Action.MANAGER_ASSIGN, MANAGER, {"executor_id": other})
+    fields = _patch_fields(res)
+    assert fields["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+    assert fields["executor_id"] == (Op.SET, other)
+
+
+def test_status_intent_with_executor_from_clarification_assigns():
+    """Дашборд шлёт `status=В работе` + `executor_id` — это назначение."""
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+    from uk_management_bot.utils.request_workflow import LegacyStatusIntent, resolve_command
+
+    cmd = resolve_command(
+        _snap(REQUEST_STATUS_CLARIFICATION), MANAGER,
+        LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS, {"executor_id": EXECUTOR_ID}))
+    assert cmd.action is Action.MANAGER_ASSIGN
+
+
+def test_status_intent_from_new_still_resolves_to_assign():
+    """Разбор по payload — только для «Уточнения»: из «Новой» назначение
+    остаётся единственным кандидатом, и отказ без исполнителя — понятный
+    «нет executor_id», а не «перехода нет»."""
+    from uk_management_bot.utils.request_workflow import LegacyStatusIntent, resolve_command
+
+    cmd = resolve_command(_snap(REQUEST_STATUS_NEW), MANAGER,
+                          LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+    assert cmd.action is Action.MANAGER_ASSIGN
+
+
+def test_status_intent_without_executor_from_clarification_resumes():
+    """Без `executor_id` — прежнее возобновление (исполнитель уже ведёт)."""
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+    from uk_management_bot.utils.request_workflow import LegacyStatusIntent, resolve_command
+
+    cmd = resolve_command(
+        _snap(REQUEST_STATUS_CLARIFICATION, executor=EXECUTOR_ID), MANAGER,
+        LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+    assert cmd.action is Action.CLARIFY_RESOLVED

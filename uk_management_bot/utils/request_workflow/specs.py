@@ -75,8 +75,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     # +В работе: ручной выбор менеджером другого исполнителя = переназначение из
     # «В работе». same-canon В работе→В работе — легальный re-entry (check_repeat
     # вернёт None, т.к. canon ∈ from).
+    # +Уточнение (2026-11-19): ИИ-менеджер уводит туда заявку прямо из «Новой»,
+    # без исполнителя. CLARIFY_RESOLVED оттуда отказывает (инвариант «В работе ⟺
+    # исполнитель»), и без назначения отсюда заявка была в тупике.
     Action.MANAGER_ASSIGN: ActionSpec(
-        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS,
+                   REQUEST_STATUS_CLARIFICATION}),
         REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a) or _engineer_can_assign(s, a), RepeatPolicy.NO_OP_IF_SAME),
     # ИИ-менеджер (SLA-лестница): переназначение просроченной «В работе»

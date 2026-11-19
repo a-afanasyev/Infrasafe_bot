@@ -913,6 +913,38 @@ class TestDutyOutcomeTexts:
             show_alert=True)
         cb.message.edit_text.assert_not_awaited(), "экран успеха не должен рисоваться"
 
+    @pytest.mark.asyncio
+    async def test_duty_from_clarification_goes_through_canon(self, db, monkeypatch):
+        """«В работу → Дежурному» на заявке в «Уточнении» без исполнителя.
+
+        Групповое назначение статус не двигает, а взять заявку из «Уточнения»
+        дежурный не может — менеджер видел «✅ назначена», заявка оставалась в
+        тупике. Отсюда назначаем конкретного дежурного каноном (→ «В работе»).
+        """
+        from uk_management_bot.handlers.admin import assignment as assign_mod
+        from uk_management_bot.handlers.admin import reassignment as re_mod
+        from uk_management_bot.handlers.admin import shared
+        from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _request(db, executor_id=None, status=REQUEST_STATUS_CLARIFICATION)
+
+        pre = re_mod.Preflight("ok", request_number=NUMBER)
+        monkeypatch.setattr(re_mod, "_resolve_duty", lambda s, n, lang: pre)
+        commit = AsyncMock()
+        monkeypatch.setattr(re_mod, "_commit_reassign", commit)
+        group_assign = AsyncMock()
+        monkeypatch.setattr(assign_mod, "auto_assign_request_by_category", group_assign)
+        monkeypatch.setattr(shared, "auto_assign_request_by_category", group_assign)
+
+        cb = _callback(f"assign_duty_{NUMBER}")
+        manager = SimpleNamespace(id=MANAGER_ID)
+        await assign_mod.handle_assign_duty_executor_admin(
+            cb, db=db, roles=["manager"], user=manager, language="ru")
+
+        commit.assert_awaited_once_with(cb, manager, "ru", pre)
+        group_assign.assert_not_awaited()
+
     def test_outcome_order_puts_request_state_before_people(self):
         """«Уже назначена» обязана победить «нет исполнителей»: иначе при пустой
         специализации менеджер получал чужой диагноз."""

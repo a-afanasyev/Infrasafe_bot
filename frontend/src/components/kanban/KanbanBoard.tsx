@@ -124,8 +124,8 @@ export default function KanbanBoard({ onCardClick }: Props) {
     if (MODAL_STATUSES.has(newStatus)) {
       const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
       // 'В работе': модалка выбора исполнителя нужна только при назначении из
-      // «Новая» без исполнителя. Из «Закуп»/«Уточнение»/«Выполнена»/«Исполнено»/
-      // «Возвращена» это resume/return — коммитим напрямую (executor_id там → 422).
+      // «Новая» или «Уточнение» без исполнителя (правило — inProgressNeedsExecutorModal).
+      // Иначе это resume/return — коммитим напрямую (executor_id там → 422).
       if (newStatus === 'В работе') {
         // Возврат из приёмочных статусов обязан нести причину (ядро иначе даёт
         // 422), а resume из «Закуп»/«Уточнение» — наоборот, причины не примет.

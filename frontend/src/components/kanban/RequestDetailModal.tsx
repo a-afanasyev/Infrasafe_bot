@@ -258,9 +258,10 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   onSelect={(targetStatus) => {
                     if (MODAL_STATUSES.has(targetStatus)) {
                       // 'В работе': модалка выбора исполнителя нужна только при
-                      // назначении из «Новая» без исполнителя (canon MANAGER_ASSIGN).
-                      // Из resume/return-источников (Закуп/Уточнение/Выполнена/
-                      // Исполнено/Возвращена) executor_id НЕ принимается backend'ом
+                      // назначении из «Новая» или «Уточнение» без исполнителя
+                      // (canon MANAGER_ASSIGN). Из resume/return-источников (Закуп/
+                      // Уточнение с исполнителем/Выполнена/Исполнено/Возвращена)
+                      // executor_id НЕ принимается backend'ом
                       // (→ 422 «unexpected field 'executor_id'»), поэтому коммитим
                       // переход напрямую. Зеркалит фикс в KanbanBoard.handleDragEnd.
                       // Возврат в работу обязан нести причину (ядро иначе даёт
@@ -663,6 +664,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
         category={request.category ?? null}
         currentExecutorId={request.executor_id ?? null}
         currentExecutorName={request.executor_name ?? null}
+        leavesClarification={request.status === 'Уточнение'}
         onClose={() => setReassignOpen(false)}
         onReassigned={() => setCategoryWarning(null)}
       />

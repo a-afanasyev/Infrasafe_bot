@@ -341,6 +341,11 @@ def resume_after_answer_sync(request_number: str, reply_text: str, ai_cfg: dict,
             last = _last_applied(db, request_number) if req is not None else None
             if req is None or not last or not last.get("clarified") or last.get("resumed"):
                 return None
+            if req.executor_id is not None:
+                # Исполнителя назначил человек (MANAGER_ASSIGN пускает из
+                # «Уточнения»), маркер `clarified` остался от прошлого круга, а
+                # этот вопрос задал уже менеджер. В очередь заявку не возвращаем.
+                return None
             user = db.get(User, req.user_id) if req.user_id else None
             ctx = _Context(
                 request_number=request_number,
