@@ -570,9 +570,10 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
             try:
                 bot = callback.bot
 
-                notification_text = get_text("admin.handlers.notify_applicant_reconfirmed", language=lang).format(
-                    request_number=request.format_number_for_display()
-                )
+                # Язык — получателя, не менеджера; номер — без «№»: «#» уже в шаблоне.
+                notification_text = get_text(
+                    "admin.handlers.notify_applicant_reconfirmed", language=applicant.language or "ru",
+                ).format(request_number=request_number)
 
                 await bot.send_message(applicant.telegram_id, notification_text)
                 logger.info(f"✅ Уведомление о принятии возвратной заявки {request_number} отправлено заявителю {applicant.telegram_id}")
