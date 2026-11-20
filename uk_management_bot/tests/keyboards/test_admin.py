@@ -252,7 +252,7 @@ class TestGetManagerRequestActionsKeyboard:
              patch(CALLBACK_HELPER_PATH + ".create_callback_data_with_request_number",
                    side_effect=_mock_create_callback):
             from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard
-            result = get_manager_request_actions_keyboard("250101-020", has_media=False)
+            result = get_manager_request_actions_keyboard("250101-020", has_media=False, can_delete=True)
         assert len(_all_inline_buttons(result)) == 6
 
     def test_with_media_has_seven_buttons(self):
@@ -260,7 +260,7 @@ class TestGetManagerRequestActionsKeyboard:
              patch(CALLBACK_HELPER_PATH + ".create_callback_data_with_request_number",
                    side_effect=_mock_create_callback):
             from uk_management_bot.keyboards.admin import get_manager_request_actions_keyboard
-            result = get_manager_request_actions_keyboard("250101-021", has_media=True)
+            result = get_manager_request_actions_keyboard("250101-021", has_media=True, can_delete=True)
         assert len(_all_inline_buttons(result)) == 7
 
 
@@ -529,7 +529,7 @@ class TestGetManagerRequestListKb:
             from uk_management_bot.keyboards.admin import get_manager_request_list_kb
             result = get_manager_request_list_kb(requests=[], page=1, total_pages=3)
         callbacks = _all_inline_callbacks(result)
-        assert "mreq_page_0" not in callbacks
+        assert not any(c.endswith("_0") for c in callbacks)
 
     def test_pagination_next_shown_when_not_last_page(self):
         with patch(CALLBACK_HELPER_PATH + ".create_callback_data_with_request_number",
@@ -537,7 +537,7 @@ class TestGetManagerRequestListKb:
             from uk_management_bot.keyboards.admin import get_manager_request_list_kb
             result = get_manager_request_list_kb(requests=[], page=1, total_pages=3)
         callbacks = _all_inline_callbacks(result)
-        assert "mreq_page_2" in callbacks
+        assert "mreq_page_active_2" in callbacks
 
 
 # ---------------------------------------------------------------------------

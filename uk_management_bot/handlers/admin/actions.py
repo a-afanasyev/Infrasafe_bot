@@ -35,6 +35,7 @@ from .shared import (
 )
 
 from .lists import _render_manager_request_list
+from .shared import close_prompt, delete_admin_ids, remember_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +116,13 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
                 address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"mview_{request_number}")]
             ])
         )
 
         # Сохраняем номер заявки в состоянии для отклонения
         await state.update_data(deny_request_number=request_number)
+        await remember_prompt(callback, state)
         
         # Устанавливаем состояние ожидания причины отклонения
         await state.set_state(ManagerStates.cancel_reason)
@@ -159,6 +161,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
         
         # Сохраняем номер заявки в состоянии
         await state.update_data(request_number=request_number)
+        await remember_prompt(callback, state)
         
         # Запрашиваем текст уточнения
         await callback.message.edit_text(
@@ -168,7 +171,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
                 address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_clarification")]
+                [InlineKeyboardButton(text=get_text("common.cancel", language=lang), callback_data="cancel_clarification")]
             ])
         )
         
@@ -270,7 +273,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
         await callback.message.edit_text(
             prompt_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"mview_{request_number}")]
             ])
         )
 
@@ -369,10 +372,7 @@ async def handle_delete_request(callback: CallbackQuery, db: Session, roles: lis
         logger.info(f"Попытка удаления заявки пользователем {callback.from_user.id}")
 
         # Проверяем права доступа - ТОЛЬКО АДМИНИСТРАТОРЫ могут удалять заявки
-        import os
-        admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
-        admin_ids = [int(id.strip()) for id in admin_ids_str.split(",") if id.strip()]
-
+        admin_ids = delete_admin_ids()
         if callback.from_user.id not in admin_ids:
             await callback.answer(get_text("admin.handlers.delete_admin_only", language=lang), show_alert=True)
             logger.warning(f"Пользователь {callback.from_user.id} попытался удалить заявку без прав администратора")
@@ -535,12 +535,13 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
 
 
         # Подтверждаем менеджеру
-        await message.answer(
-            get_text("admin.handlers.clarification_sent", language=lang).format(
-                request_number=request.request_number,
-                text_preview=html.escape(clarification_text[:100]) + ('...' if len(clarification_text) > 100 else '')
-            )
+        done = get_text("admin.handlers.clarification_sent", language=lang).format(
+            request_number=request.request_number,
+            text_preview=html.escape(clarification_text[:100]) + ('...' if len(clarification_text) > 100 else '')
         )
+        # Итог — в исходное сообщение (бывшую карточку), новым — только если не вышло.
+        if not await close_prompt(message, state, done):
+            await message.answer(done)
         
         # Очищаем состояние
         await state.clear()
@@ -628,6 +629,9 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
             await state.clear()
             return
 
+        # Подсказка с «Отменой» больше не нужна; сам итог идёт новым сообщением —
+        # он возвращает меню менеджера, а reply-клавиатуру правкой не передать.
+        await close_prompt(message, state)
         await message.answer(
             get_text("admin.handlers.request_denied", language=lang).format(
                 request_number=request_number,

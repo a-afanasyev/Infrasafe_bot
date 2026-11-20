@@ -172,8 +172,6 @@ BASELINE: set[tuple[str, str, str]] = {
     # AUD3-06: admin.py разбит на пакет handlers/admin/ — те же UI-сравнения,
     # разнесены по под-модулям views/lists/actions/materials.
     ('uk_management_bot/handlers/admin/actions.py', 'cmp:request', 'status'),
-    ('uk_management_bot/handlers/admin/lists.py', 'cmp:r', 'status'),
-    ('uk_management_bot/handlers/admin/lists.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/admin/lists.py', 'if:r', 'is_returned'),
     ('uk_management_bot/handlers/admin/materials.py', 'cmp:request', 'status'),
     ('uk_management_bot/handlers/clarification_replies.py', 'cmp:request', 'status'),

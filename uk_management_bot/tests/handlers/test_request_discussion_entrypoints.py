@@ -32,7 +32,8 @@ NUMBER = "260705-960"
 
 
 def _callbacks(markup) -> list[str]:
-    return [b.callback_data for row in markup.inline_keyboard for b in row]
+    # кнопки копирования и отключённые кнопки callback_data не несут
+    return [b.callback_data for row in markup.inline_keyboard for b in row if b.callback_data]
 
 
 @pytest.fixture

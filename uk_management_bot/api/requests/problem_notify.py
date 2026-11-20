@@ -17,6 +17,7 @@ from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.executor_problem import render_manager_text
 from uk_management_bot.services.feedback_service import manager_recipients_async
 from uk_management_bot.utils.http_errors import describe_http_error
+from uk_management_bot.utils.manager_cards import manager_card_markup
 from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,10 @@ async def notify_managers_problem_detached(request_number: str, executor_id: int
             language, request_number=request_number, executor=executor_name,
             address=request.address, template=template, text=text)
         try:
-            result = await telegram_send.send_message(chat_id, message, parse_mode="HTML")
+            # Кнопки по фактическому состоянию заявки: переназначить / открыть.
+            result = await telegram_send.send_message(
+                chat_id, message, parse_mode="HTML",
+                reply_markup=manager_card_markup(request, language).model_dump(exclude_none=True))
         except Exception as exc:  # noqa: BLE001 — один получатель не лишает остальных
             logger.warning("problem-уведомление по %s менеджеру %s не отправлено: %s",
                            request_number, chat_id, describe_http_error(exc))

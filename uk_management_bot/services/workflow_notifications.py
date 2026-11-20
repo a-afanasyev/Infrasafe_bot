@@ -45,6 +45,7 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.request_access import apartment_resident_ids_stmt
+from uk_management_bot.utils import manager_cards
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.request_workflow import Action
 
@@ -57,6 +58,9 @@ EXECUTOR = "executor"
 # `_collect_*` через recipients_with_action, где есть сессия. Не роль заявки.
 ACTION_AUDIENCE_PREFIX = "action:"
 ENGINEERS = ACTION_AUDIENCE_PREFIX + "requests.engineering"
+# Все, кому разрешено решать по заявке (сегодня — роль manager). Одно правило
+# получателей для карточек-решений: по праву, а не по списку ролей.
+MANAGERS = ACTION_AUDIENCE_PREFIX + "management.decide"
 
 # action → (получатели, i18n-ключ). Ключи лежат в config/locales/{ru,uz}.json
 # под `notifications.workflow.*` и получают request_number/category/address.
@@ -101,7 +105,13 @@ _NOTIFY_MATRIX: dict[Action, object] = {
         ((APPLICANT,), "notifications.workflow.assigned"),
     ),
     # Готовность к приёмке — единственное действие, которого ЖДУТ от жителя.
-    Action.EXECUTOR_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
+    # Менеджерам — карточка с кнопками проверки. Их спецификация идёт ПЕРВОЙ:
+    # менеджер, который сам заявитель, получает только карточку (дедуп по
+    # действию), а она содержит всё, что есть в жительском тексте.
+    Action.EXECUTOR_COMPLETE: (
+        ((MANAGERS,), manager_cards.REVIEW_KEY),
+        ((APPLICANT,), "notifications.workflow.executed"),
+    ),
     Action.MANAGER_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
     Action.MANAGER_CONFIRM: ((APPLICANT,), "notifications.workflow.ready_for_acceptance"),
     # Возврат менеджером в работу: исполнителю — переделывать, жителю — статус.
@@ -114,7 +124,11 @@ _NOTIFY_MATRIX: dict[Action, object] = {
     # API/TWA-пути возврат жителя не уведомлял никого (бот слал через легаси).
     # Фаза 4: статус после возврата — «Возвращена», а не «В работе»; текст
     # «вернули на доработку» + причина жителя + кнопка «Открыть».
-    Action.APPLICANT_RETURN: ((EXECUTOR,), "notifications.workflow.returned_for_rework"),
+    # Менеджерам — карточка: принять (возврат необоснован) или вернуть в работу.
+    Action.APPLICANT_RETURN: (
+        ((MANAGERS,), manager_cards.RETURNED_KEY),
+        ((EXECUTOR,), "notifications.workflow.returned_for_rework"),
+    ),
     Action.CANCEL: ((APPLICANT,), "notifications.workflow.cancelled"),
     # Смена категории: только исполнителю (решение владельца 2026-09-03) —
     # житель ярлыка не видит. Интент планировщик выпускает лишь для
@@ -297,6 +311,9 @@ def _render_text(
             address=html.escape(request.address or ""),
             clarification_text=html.escape(clarification_text),
         )
+    if text_key in manager_cards.MANAGER_CARD_KEYS:
+        return manager_cards.manager_card_text(
+            text_key, language, request, _category_label(request, language))
     if text_key == _ASSIGNED_EXECUTOR_KEY:
         # Наряд исполнителю: категория локализуется тем же хелпером, что и в
         # ветке уточнения, и так же экранируется — `get_category_display` для
@@ -367,6 +384,8 @@ def _reply_markup(text_key: str, language: str, request: Request):
     Все получатели матрицы — адресные (личка по telegram_id), web_app там
     допустим. Житель кнопку не получает: маршрут исполнителя не его.
     """
+    if text_key in manager_cards.MANAGER_CARD_KEYS:
+        return manager_cards.manager_card_markup(request, language)
     if text_key not in _OPEN_BUTTON_KEYS:
         return None
     from uk_management_bot.utils.twa_links import executor_task_open_markup
@@ -487,6 +506,25 @@ def _load_users_sync(db: Session, wanted_ids: set[int]) -> list[User]:
     return [u for u in users if u.telegram_id]
 
 
+def _drop_already_addressed(action: Action, text_key: str, recipients: list, seen: dict) -> list:
+    """Убрать тех, кому по этому действию уже адресовано более раннее задание.
+
+    `_resolve_targets` снимает пересечения только адресных ролей (заявитель/
+    исполнитель); обладатели `action:…` подмешиваются позже. Без этого шага
+    менеджер-заявитель получал бы и карточку решения, и жительский текст.
+    Порядок заданий = порядок спецификаций в матрице: побеждает первое.
+    """
+    if text_key == _REPEATED_RETURN_KEY:
+        # «Вернули уже в N-й раз» — дополнение к матрице со своим содержанием
+        # (счётчик возвратов): инженер с правом менеджера получает и карточку
+        # решения, и это предупреждение.
+        return recipients
+    already = seen.setdefault(action, set())
+    fresh = [r for r in recipients if r.telegram_id not in already]
+    already.update(r.telegram_id for r in fresh)
+    return fresh
+
+
 def _with_audience(users: list, holders: Iterable) -> list:
     """Адресные получатели + обладатели действия, без дублей по telegram_id.
     У обоих есть `telegram_id`/`language` — рассылка их не различает."""
@@ -527,10 +565,12 @@ async def _collect_async(
     if request is None:
         return None, []
     jobs: list[tuple[Action, str, list[User]]] = []
+    seen: dict = {}
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
             wanted_ids = await _wanted_with_residents_async(db, request, wanted_ids)
-            recipients = await _recipients_async(db, wanted_ids, audience)
+            recipients = _drop_already_addressed(
+                action, text_key, await _recipients_async(db, wanted_ids, audience), seen)
         except Exception as e:
             logger.warning(
                 "Уведомление по действию %s для заявки %s не отправлено: %s",
@@ -675,10 +715,12 @@ async def dispatch_notify_intents_sync(
     if request is None:
         return 0
     sent = 0
+    seen: dict = {}
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
             wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
-            recipients = _recipients_sync(db, wanted_ids, audience)
+            recipients = _drop_already_addressed(
+                action, text_key, _recipients_sync(db, wanted_ids, audience), seen)
             if not recipients:
                 continue
             sent += await _send_to_recipients(
@@ -721,10 +763,12 @@ def collect_notify_messages_sync(
     if request is None:
         return []
     messages: list[tuple[int, str]] = []
+    seen: dict = {}
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
             wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
-            for user in _recipients_sync(db, wanted_ids, audience):
+            for user in _drop_already_addressed(
+                    action, text_key, _recipients_sync(db, wanted_ids, audience), seen):
                 language = user.language or "ru"
                 messages.append(NotifyMessage(
                     user.telegram_id,
@@ -741,6 +785,67 @@ def collect_notify_messages_sync(
     if public is not None:
         messages.append(NotifyMessage(public.chat_id, public.text, None))
     return messages
+
+
+def _unassigned_messages(request: Optional[Request], recipients: list) -> list:
+    """Карточки «заявка без исполнителя» — или пусто, если решать уже нечего.
+
+    Заявку перечитывают перед рассылкой: между созданием и отправкой её мог
+    взять дежурный из пула или назначить менеджер с дашборда.
+    """
+    from uk_management_bot.utils.workflow_predicates import is_unassigned_new
+
+    if request is None or not is_unassigned_new(request):
+        return []
+    key = manager_cards.UNASSIGNED_KEY
+    return [
+        NotifyMessage(
+            r.telegram_id,
+            manager_cards.manager_card_text(
+                key, r.language or "ru", request, _category_label(request, r.language or "ru")),
+            manager_cards.manager_card_markup(request, r.language or "ru"),
+        )
+        for r in recipients
+    ]
+
+
+def collect_unassigned_messages_sync(db: Session, request_number: str) -> list:
+    """Fetch/render-фаза карточки «без исполнителя» (бот-путь, sync-сессия)."""
+    request = db.execute(
+        select(Request).where(Request.request_number == request_number)
+    ).scalar_one_or_none()
+    return _unassigned_messages(
+        request, _recipients_sync(db, set(), (MANAGERS[len(ACTION_AUDIENCE_PREFIX):],)))
+
+
+async def notify_managers_unassigned_detached(request_number: str) -> int:
+    """Карточка «без исполнителя» менеджерам (API-путь, fastapi BackgroundTasks).
+
+    Своя короткая сессия только на чтение, закрытая до первой отправки — как у
+    `dispatch_notify_intents_detached`. Не бросает; → число доставленных.
+    """
+    from uk_management_bot.database.session import AsyncSessionLocal
+    from uk_management_bot.services.notification_service import _get_shared_bot
+
+    if AsyncSessionLocal is None:
+        logger.warning("карточка «без исполнителя» по %s пропущена: нет async-движка",
+                       request_number)
+        return 0
+    try:
+        async with AsyncSessionLocal() as session:
+            request = await _load_request(session, request_number)
+            recipients = await _recipients_async(
+                session, set(), (MANAGERS[len(ACTION_AUDIENCE_PREFIX):],))
+        messages = _unassigned_messages(request, recipients)
+        if not messages:
+            return 0
+        # Бот строится здесь же, под тем же перехватом: невалидный токен или
+        # сбой сети — не повод ронять фоновую задачу уже созданной заявки.
+        return await send_notify_messages(_get_shared_bot(), messages)
+    except Exception as e:
+        logger.warning("карточка «без исполнителя» по %s не отправлена: %s",
+                       request_number, type(e).__name__)
+        return 0
 
 
 async def send_notify_messages(bot, messages: list[tuple[int, str]]) -> int:

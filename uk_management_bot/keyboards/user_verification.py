@@ -264,17 +264,6 @@ def _format_user_name(user) -> str:
     return display_name(user)
 
 
-def _get_verification_status_emoji(status: str) -> str:
-    """Получить эмодзи для статуса верификации"""
-    status_emojis = {
-        'pending': '⏳',
-        'verified': '✅',
-        'rejected': '❌',
-        'requested': '📝'
-    }
-    return status_emojis.get(status, '❓')
-
-
 def get_document_checklist_keyboard(user_id: int, selected_docs: list = None, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура с галочками для выбора документов

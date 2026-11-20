@@ -14,16 +14,3 @@ class ShiftTransferStates(StatesGroup):
     enter_comment = State()             # Ввод комментария
     select_urgency = State()            # Выбор уровня срочности
     confirm_transfer = State()          # Подтверждение передачи
-
-    # Назначение исполнителя (для менеджеров)
-    select_executor = State()           # Выбор исполнителя для назначения
-    confirm_assignment = State()        # Подтверждение назначения
-
-    # Ответ на передачу (для исполнителей)
-    respond_to_transfer = State()       # Принятие/отклонение передачи
-    enter_response_comment = State()    # Комментарий к ответу
-
-    # Просмотр и управление
-    view_transfers = State()            # Просмотр списка передач
-    transfer_details = State()          # Детали конкретной передачи
-    edit_transfer = State()             # Редактирование передачи

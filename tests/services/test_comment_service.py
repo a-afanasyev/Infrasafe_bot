@@ -170,6 +170,8 @@ class TestFormatCommentsForDisplay:
         assert "Иван" in result
         assert "Петров" in result
         assert "Статус изменен" in result
+        # бот шлёт в parse_mode=HTML: «**» показались бы буквально
+        assert "<b>" in result and "**" not in result
 
     def test_formats_comments_without_user(self):
         self.db.query.return_value.filter.return_value.first.return_value = None

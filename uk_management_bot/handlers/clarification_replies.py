@@ -130,7 +130,7 @@ def _ai_resume_sync(db, request_number: str, reply_text: str) -> None:
     from sqlalchemy.orm import sessionmaker
 
     from uk_management_bot.services.ai_manager.apply import resume_after_answer_sync
-    from uk_management_bot.services.dispatch import _ai_config_sync, auto_dispatch_new_request_sync
+    from uk_management_bot.services.dispatch import _ai_config_sync, auto_dispatch_created_request_sync
 
     ai_cfg = _ai_config_sync(db)
     if ai_cfg is None:
@@ -138,7 +138,8 @@ def _ai_resume_sync(db, request_number: str, reply_text: str) -> None:
     factory = sessionmaker(bind=db.get_bind(), autoflush=False)
     category = resume_after_answer_sync(request_number, reply_text, ai_cfg, factory)
     if category:
-        auto_dispatch_new_request_sync(request_number, category, session_factory=factory)
+        # Как при создании: если исполнителя так и не нашлось — карточка менеджерам.
+        auto_dispatch_created_request_sync(request_number, category, session_factory=factory)
 
 
 def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lang: str) -> tuple:

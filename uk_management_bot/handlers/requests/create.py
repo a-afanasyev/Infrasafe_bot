@@ -635,8 +635,8 @@ def save_request_sync(
         # FEAT-группы: авто-dispatch на группу-специализацию (Новая→В работе +
         # group-назначение) через канонический run_command. Best-effort — ошибка
         # не валит уже-созданную заявку. ПОСЛЕ commit (своя сессия, свой лок).
-        from uk_management_bot.services.dispatch import auto_dispatch_new_request_sync
-        auto_dispatch_new_request_sync(request_number, data['category'])
+        from uk_management_bot.services.dispatch import auto_dispatch_created_request_sync
+        auto_dispatch_created_request_sync(request_number, data['category'])
 
         return request_number, user.id, media_file_ids
     except ElevatorValidationError as e:

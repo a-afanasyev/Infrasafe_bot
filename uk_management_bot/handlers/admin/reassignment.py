@@ -317,6 +317,14 @@ async def _guard(callback: CallbackQuery, roles, user, lang) -> bool:
 
 
 async def _answer_verdict(callback: CallbackQuery, pre: Preflight, lang: str) -> None:
+    if pre.verdict == "bad_status" and pre.request_number:
+        # Статус уже не тот, из которого назначают: заявку обработал кто-то
+        # другой (карточку-решение получают все менеджеры). Говорим, что с ней
+        # сейчас, а не безличное «статус не подходит».
+        from .shared import already_handled_text
+        await callback.answer(
+            await already_handled_text(pre.request_number, lang), show_alert=True)
+        return
     texts = {
         "request_not_found": get_text("admin.handlers.request_not_found", language=lang),
         "bad_status": get_text("admin.handlers.reassign_bad_status", language=lang),

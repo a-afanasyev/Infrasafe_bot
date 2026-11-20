@@ -502,8 +502,8 @@ async def persist_request(
     # FEAT-группы: авто-dispatch на группу-специализацию (Новая→В работе + group)
     # через канонический run_command + realtime status_changed. Best-effort.
     # refresh — чтобы карточка ответа отразила актуальный статус (В работе).
-    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
-    await auto_dispatch_new_request_async(
+    from uk_management_bot.services.dispatch import auto_dispatch_created_request_async
+    await auto_dispatch_created_request_async(
         req.request_number, category, schedule_notify=schedule_notify, preferred_executor_id=preferred_executor_id)
     await db.refresh(req)
     await db.commit()  # отдать соединение в пул до сериализации ответа

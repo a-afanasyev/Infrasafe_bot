@@ -14,11 +14,13 @@ ORM-строки (у ORM-объекта вне потока нет живой с
 import html
 import logging
 from dataclasses import dataclass, field
-from typing import List
+from typing import Optional, List
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+
+from uk_management_bot.handlers.admin.lists import edit_quiet
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -512,6 +514,26 @@ async def handle_comment_cancellation(callback: CallbackQuery, state: FSMContext
 _VIEW_COMMENTS_RE = rf"^view_comments_{REQUEST_NUMBER_CORE}$"
 
 
+_MANAGER_CARD_PREFIXES = ("mview_", "mreq_page_", "mreq_back_")
+
+
+def _back_callback(request_number: str, markup) -> Optional[str]:
+    """Куда ведёт «Назад к заявке»: туда, откуда пришли.
+
+    Комментарии открываются правкой карточки, поэтому её клавиатура ещё на
+    сообщении. Если это карточка менеджера (кнопка возврата в его список) или
+    уже список комментариев, открытый из неё, — назад ведём в `mview_`: общая
+    `view_request_` показала бы менеджеру все действия подряд, без учёта
+    статуса, и вернула бы в список жителя. Право на карточку проверяет сам её
+    хендлер.
+    """
+    rows = markup.inline_keyboard if markup else []
+    from_manager_card = any(
+        (button.callback_data or "").startswith(_MANAGER_CARD_PREFIXES)
+        for row in rows for button in row)
+    return f"mview_{request_number}" if from_manager_card else None
+
+
 @router.callback_query(F.data.regexp(_VIEW_COMMENTS_RE))
 async def handle_view_comments(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Просмотр комментариев заявки"""
@@ -543,12 +565,10 @@ async def handle_view_comments(callback: CallbackQuery, state: FSMContext, langu
             return
 
         # Показываем комментарии
-        keyboard = get_comments_list_keyboard(view.request_number, lang)
+        keyboard = get_comments_list_keyboard(
+            view.request_number, lang, _back_callback(view.request_number, callback.message.reply_markup))
 
-        await callback.message.edit_text(
-            view.formatted_comments,
-            reply_markup=keyboard
-        )
+        await edit_quiet(callback, view.formatted_comments, keyboard)
 
         await callback.answer()
 
@@ -596,12 +616,10 @@ async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContex
             return
 
         # Показываем комментарии
-        keyboard = get_comments_list_keyboard(view.request_number, lang)
+        keyboard = get_comments_list_keyboard(
+            view.request_number, lang, _back_callback(view.request_number, callback.message.reply_markup))
 
-        await callback.message.edit_text(
-            view.formatted_comments,
-            reply_markup=keyboard
-        )
+        await edit_quiet(callback, view.formatted_comments, keyboard)
 
         await callback.answer()
 
@@ -643,12 +661,10 @@ async def handle_back_to_comments(callback: CallbackQuery, state: FSMContext, la
             return
 
         # Показываем комментарии
-        keyboard = get_comments_list_keyboard(view.request_number, lang)
+        keyboard = get_comments_list_keyboard(
+            view.request_number, lang, _back_callback(view.request_number, callback.message.reply_markup))
 
-        await callback.message.edit_text(
-            view.formatted_comments,
-            reply_markup=keyboard
-        )
+        await edit_quiet(callback, view.formatted_comments, keyboard)
 
         await callback.answer()
 

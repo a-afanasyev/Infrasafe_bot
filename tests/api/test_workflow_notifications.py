@@ -389,3 +389,55 @@ async def test_detached_dispatch_opens_own_session(
     assert delivered == 1
     telegram_id, _ = sent[0]
     assert telegram_id == 900001  # житель
+
+
+# ── карточка «без исполнителя»: фоновая задача не вправе бросать ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_unassigned_card_never_raises_when_the_bot_cannot_be_built(
+        db_session, db_session_factory, monkeypatch):
+    """Поймано `make test-ci`: бот строился вне перехвата, и невалидный токен
+    ронял фоновую задачу уже созданной заявки (26 тестов создания на PostgreSQL)."""
+    await _seed(db_session, with_executor=False)
+    db_session.add(User(telegram_id=900009, roles='["manager"]', active_role="manager",
+                        status="approved", language="ru", first_name="Менеджер"))
+    request = await db_session.get(Request, "260725-001")
+    request.status = "Новая"
+    await db_session.commit()
+
+    def broken_bot():
+        raise ValueError("Token is invalid!")
+
+    monkeypatch.setattr("uk_management_bot.database.session.AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr(
+        "uk_management_bot.services.notification_service._get_shared_bot", broken_bot)
+
+    assert await wn.notify_managers_unassigned_detached("260725-001") == 0
+
+
+@pytest.mark.asyncio
+async def test_unassigned_card_is_sent_to_managers_with_buttons(
+        db_session, db_session_factory, monkeypatch):
+    await _seed(db_session, with_executor=False)
+    db_session.add(User(telegram_id=900009, roles='["manager"]', active_role="manager",
+                        status="approved", language="ru", first_name="Менеджер"))
+    request = await db_session.get(Request, "260725-001")
+    request.status = "Новая"
+    await db_session.commit()
+    calls = []
+
+    async def fake_send(bot, telegram_id, text, reply_markup=None):
+        calls.append((telegram_id, text, reply_markup))
+        return True
+
+    monkeypatch.setattr("uk_management_bot.database.session.AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr("uk_management_bot.services.notification_service.send_to_user", fake_send)
+    monkeypatch.setattr(
+        "uk_management_bot.services.notification_service._get_shared_bot", lambda: MagicMock())
+
+    assert await wn.notify_managers_unassigned_detached("260725-001") == 1
+    chat_id, text, markup = calls[0]
+    assert chat_id == 900009 and "#260725-001" in text
+    callbacks = [b.callback_data for row in markup.inline_keyboard for b in row]
+    assert "req_reassign_duty_260725-001" in callbacks

@@ -21,6 +21,8 @@ def _users(seed):
         seed.user(4, roles='["executor", "engineer"]', deleted_at=NOW),
         seed.user(5, roles='["executor", "engineer"]', status="pending"),
         seed.user(6, roles='["applicant", "executor", "engineer"]'),
+        # служебная запись без чата (telegram_id=0) — не адресат
+        seed.user(7, roles='["executor", "engineer"]', telegram_id=0),
     ]
 
 

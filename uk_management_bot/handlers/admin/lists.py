@@ -1,5 +1,6 @@
 """Менеджер: панели, списки заявок по статусам, архив, закуп."""
 from aiogram import F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.orm import Session
 
@@ -16,25 +17,23 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_EXECUTED,
-    REQUEST_STATUS_CANCELLED,
 )
 
 import html
 import logging
+from datetime import datetime, timezone
+from typing import Optional
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.status_display import get_status_with_emoji
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role, parse_roles_safe
+from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role
 from uk_management_bot.filters import RoleFilter
-from uk_management_bot.authz import has_action_roles
-from datetime import datetime, timezone
 
 from ._router import router
 
 from .shared import (
     ADMIN_PANEL_TEXTS,
-    TEST_MIDDLEWARE_TEXTS,
     ADMIN_USER_MANAGEMENT_TEXTS,
     ADMIN_EMPLOYEE_MANAGEMENT_TEXTS,
     ADMIN_NEW_REQUESTS_TEXTS,
@@ -51,6 +50,98 @@ from .shared import (
 logger = logging.getLogger(__name__)
 
 
+MANAGER_LIST_PAGE_SIZE = 10
+
+# вид списка -> (ключ заголовка, ключ «пусто»); {count} в заголовке = всего заявок
+_MANAGER_LISTS = {
+    "new": ("admin.handlers.new_requests_title", "admin.handlers.no_new_requests"),
+    "active": ("admin.handlers.active_requests_title", "admin.handlers.no_active_requests"),
+    "executed": ("admin.handlers.completed_requests_title", "admin.handlers.no_completed_requests"),
+    "review": ("admin.handlers.all_completed_requests_title", "admin.handlers.no_completed_requests"),
+    "returned": ("admin.handlers.returned_requests_title", "admin.handlers.no_returned_requests"),
+    "unaccepted": ("admin.handlers.unaccepted_requests_title", "admin.handlers.no_unaccepted_requests"),
+    "archive": ("admin.handlers.archive_requests_title", "admin.handlers.archive_empty"),
+}
+_STATUS_TO_LIST = {
+    REQUEST_STATUS_NEW: "new",
+    REQUEST_STATUS_EXECUTED: "executed",
+    REQUEST_STATUS_IN_PROGRESS: "active",
+    REQUEST_STATUS_PURCHASE: "active",
+    REQUEST_STATUS_CLARIFICATION: "active",
+}
+
+
+def _waiting_suffix(since: Optional[datetime], lang: str) -> str:
+    """«⏳ 2д 3ч» — сколько заявка ждёт приёмки заявителем."""
+    if since is None:
+        return "⏳ " + get_text("unaccepted.handlers.unknown_short", language=lang)
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    waiting = datetime.now(timezone.utc) - since
+    days, hours, minutes = waiting.days, waiting.seconds // 3600, (waiting.seconds % 3600) // 60
+    d_s, h_s, m_s = (get_text(f"unaccepted.handlers.{unit}_short", language=lang)
+                     for unit in ("days", "hours", "minutes"))
+    if days > 0:
+        return f"⏳ {days}{d_s} {hours}{h_s}"
+    if hours > 0:
+        return f"⏳ {hours}{h_s} {minutes}{m_s}"
+    return f"⏳ {minutes}{m_s}"
+
+
+def _list_suffix(r, kind: str, lang: str) -> str:
+    if kind == "unaccepted":
+        return _waiting_suffix(r.completed_at or r.updated_at, lang)
+    if kind == "returned" and r.returned_at:
+        return r.returned_at.strftime("%d.%m %H:%M")
+    if kind in ("review", "executed") and r.is_returned:
+        return "🔄 " + get_text("admin.handlers.returned_label", language=lang)
+    return ""
+
+
+def build_manager_list(svc: AdminHandlerService, kind: str, page: int, lang: str) -> tuple[str, Optional[InlineKeyboardMarkup]]:
+    """Текст и клавиатура страницы списка ``kind``; клавиатура None — список пуст.
+
+    Страница за пределами списка прижимается к последней: список мог
+    сократиться, пока менеджер держал сообщение открытым.
+    """
+    title_key, empty_key = _MANAGER_LISTS[kind]
+    total = svc.count_manager_list(kind)
+    if not total:
+        return get_text(empty_key, language=lang), None
+    total_pages = (total + MANAGER_LIST_PAGE_SIZE - 1) // MANAGER_LIST_PAGE_SIZE
+    page = min(max(page, 1), total_pages)
+    requests = svc.page_manager_list(
+        kind, (page - 1) * MANAGER_LIST_PAGE_SIZE, MANAGER_LIST_PAGE_SIZE)
+    items = [{
+        "request_number": r.request_number,
+        "category": get_category_display(resolve_category_key(r.category), language=lang),
+        "address": r.address,
+        "status": r.status,
+        "suffix": _list_suffix(r, kind, lang),
+    } for r in requests]
+    title = get_text(title_key, language=lang).format(count=total)
+    return title, get_manager_request_list_kb(items, page, total_pages, language=lang, kind=kind)
+
+
+async def edit_quiet(callback: CallbackQuery, text: str, markup=None) -> None:
+    """`edit_text`, для которого «сообщение не изменено» — не ошибка.
+
+    Так бывает, когда список сократился и страница прижалась к той же, что
+    уже на экране: менеджеру незачем видеть «Произошла ошибка».
+    """
+    try:
+        await callback.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
+
+
+async def _send_manager_list(message: Message, db: Session, kind: str, lang: str, empty_markup) -> None:
+    """Первая страница списка новым сообщением (вход с reply-кнопки меню)."""
+    text, markup = build_manager_list(AdminHandlerService(db), kind, 1, lang)
+    await message.answer(text, reply_markup=markup or empty_markup)
+
+
 async def _render_manager_request_list(callback: CallbackQuery, db: Session, request_number, language: str = "ru"):
     """BUG-BOT-035: render-only — перерисовать список заявок менеджера в текущем
     сообщении по `request_number` (берётся аргументом, без парсинга callback.data).
@@ -60,58 +151,12 @@ async def _render_manager_request_list(callback: CallbackQuery, db: Session, req
     try/except. Это позволяет звать рендер из cancel/complete/delete, чьи
     callback.data не имеют префикса `mreq_back_`.
     """
-    lang = language
-    from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-
     svc = AdminHandlerService(db)
     request = svc.get_request_by_number(request_number)
-
-    if request:
-        if request.status == REQUEST_STATUS_NEW:
-            requests = svc.list_new_requests(limit=10)
-            if not requests:
-                await callback.message.edit_text(get_text("admin.handlers.no_new_requests", language=lang))
-                return
-            items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-            keyboard = get_manager_request_list_kb(items, 1, 1)
-            await callback.message.edit_text(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=keyboard)
-            return
-
-        elif request.status == REQUEST_STATUS_EXECUTED:
-            requests = svc.list_executed_requests(limit=10)
-            if not requests:
-                await callback.message.edit_text(get_text("admin.handlers.no_completed_requests", language=lang))
-                return
-            items = []
-            for r in requests:
-                item = {"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status}
-                if r.is_returned:
-                    item["suffix"] = " 🔄"
-                items.append(item)
-            keyboard = get_manager_request_list_kb(items, 1, 1)
-            await callback.message.edit_text(get_text("admin.handlers.completed_requests_title", language=lang), reply_markup=keyboard)
-            return
-
-        elif request.status in [REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE, REQUEST_STATUS_CLARIFICATION]:
-            requests = svc.list_active_requests(limit=10)
-            if not requests:
-                await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
-                return
-            items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-            keyboard = get_manager_request_list_kb(items, 1, 1)
-            await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
-            return
-
-    # Fallback: показываем активные заявки по умолчанию
-    requests = svc.list_active_requests(limit=10)
-
-    if not requests:
-        await callback.message.edit_text(get_text("admin.handlers.no_active_requests", language=lang))
-        return
-
-    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-    keyboard = get_manager_request_list_kb(items, 1, 1)
-    await callback.message.edit_text(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=keyboard)
+    # Заявки нет или статус вне списков — показываем активные.
+    kind = _STATUS_TO_LIST.get(request.status, "active") if request else "active"
+    text, markup = build_manager_list(svc, kind, 1, language)
+    await edit_quiet(callback, text, markup)
 
 
 @router.callback_query(F.data.startswith("mreq_back_"))
@@ -138,31 +183,6 @@ async def handle_manager_back_to_list(callback: CallbackQuery, db: Session, role
         logger.error(f"Ошибка возврата к списку заявок: {e}", exc_info=True)
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
-
-@router.message(F.text.in_(TEST_MIDDLEWARE_TEXTS))
-async def test_middleware(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None, language: str = "ru"):
-    """Тестовый обработчик для проверки middleware"""
-    
-    # Логирование параметров middleware для отладки
-    logger.debug(f"Admin panel access check: roles={roles}, active_role={active_role}, user_id={message.from_user.id}")
-    
-    # Проверяем доступ к админ панели
-    has_access = False
-    if roles:
-        has_access = has_action_roles(roles, "admin_panel.use")
-    elif user and user.roles:
-        # COD-01: канонический парсер ролей (JSON+CSV)
-        user_roles = parse_roles_safe(user.roles)
-        has_access = has_action_roles(user_roles, "admin_panel.use")
-    
-    logger.debug("test_middleware: доступ к админ-панели: %s", has_access)
-    
-    lang = language
-    await message.answer(get_text("admin.handlers.test_middleware_result", language=lang).format(
-        roles=roles, active_role=active_role,
-        user_status=get_text("admin.handlers.yes", language=lang) if user else get_text("admin.handlers.no", language=lang),
-        has_access=get_text("admin.handlers.yes", language=lang) if has_access else get_text("admin.handlers.no", language=lang)
-    ))
 
 @router.message(F.text.in_(ADMIN_PANEL_TEXTS))
 async def open_admin_panel(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, user_status: str = None, language: str = "ru"):
@@ -247,47 +267,26 @@ async def open_employee_management_panel(message: Message, db: Session, roles: l
 async def list_new_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать новые заявки"""
     lang = language
-    
-    # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
-    
-    # Новые заявки: только "Новая" (🆕)
-    requests = AdminHandlerService(db).list_new_requests(limit=10)
-
-    if not requests:
-        await message.answer(get_text("admin.handlers.no_new_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
-        return
-
-    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-    await message.answer(get_text("admin.handlers.new_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
+    await _send_manager_list(message, db, "new", lang, get_manager_main_keyboard(language=lang))
 
 
 @router.message(F.text.in_(ADMIN_ACTIVE_REQUESTS_TEXTS))
 async def list_active_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Показать активные заявки"""
     lang = language
-    
-    # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
-    
-    requests = AdminHandlerService(db).list_active_requests(limit=10)
-
-    if not requests:
-        await message.answer(get_text("admin.handlers.no_active_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
-        return
-
-    items = [{"request_number": r.request_number, "category": get_category_display(resolve_category_key(r.category), language=lang), "address": r.address, "status": r.status} for r in requests]
-    await message.answer(get_text("admin.handlers.active_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
+    await _send_manager_list(message, db, "active", lang, get_manager_main_keyboard(language=lang))
 
 
 @router.message(F.text.in_(ADMIN_COMPLETED_REQUESTS_TEXTS))
@@ -325,150 +324,41 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
 
 @router.message(F.text.in_(ADMIN_AWAITING_REVIEW_TEXTS))
 async def list_all_completed_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Показать заявки, ожидающие проверки менеджером"""
+    """Заявки, ожидающие подтверждения менеджером."""
     lang = language
-
-    # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
-
-    # Все исполненные заявки: статус "Выполнена" и НЕ подтверждены менеджером
-    # (ожидают проверки и подтверждения менеджером)
-    requests = AdminHandlerService(db).list_awaiting_manager(limit=10)
-
-    if not requests:
-        await message.answer(get_text("admin.handlers.no_completed_requests", language=lang), reply_markup=get_completed_requests_submenu(language=lang))
-        return
-
-    # Добавляем пометку "возвратная" для возвратных заявок
-    items = []
-    for r in requests:
-        item = {
-            "request_number": r.request_number,
-            "category": get_category_display(resolve_category_key(r.category), language=lang),
-            "address": r.address,
-            "status": "🔄 " + get_text("admin.handlers.returned_label", language=lang) if r.is_returned else r.status
-        }
-        items.append(item)
-
-    await message.answer(get_text("admin.handlers.all_completed_requests_title", language=lang), reply_markup=get_manager_request_list_kb(items, 1, 1))
+    await _send_manager_list(message, db, "review", lang, get_completed_requests_submenu(language=lang))
 
 
 @router.message(F.text.in_(ADMIN_RETURNED_TEXTS))
 async def list_returned_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Показать только возвращённые заявки"""
+    """Заявки, возвращённые заявителем на доработку."""
     lang = language
-
-    # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
-
-    # Только возвращённые заявки
-    # Статус "Исполнено" - когда заявка возвращена заявителем на доработку
-    requests = AdminHandlerService(db).list_returned_for_review(limit=10)
-
-    if not requests:
-        await message.answer(
-            get_text("admin.handlers.no_returned_requests", language=lang),
-            reply_markup=get_completed_requests_submenu(language=lang)
-        )
-        return
-
-    items = []
-    for r in requests:
-        # Форматируем информацию о возврате
-        return_info = ""
-        if r.returned_at:
-            return_info = f" • {r.returned_at.strftime('%d.%m %H:%M')}"
-
-        item = {
-            "request_number": r.request_number,
-            "category": get_category_display(resolve_category_key(r.category), language=lang),
-            "address": r.address,
-            "status": get_text("admin.handlers.returned_status_label", language=lang) + return_info
-        }
-        items.append(item)
-
-    await message.answer(
-        get_text("admin.handlers.returned_requests_title", language=lang).format(count=len(requests)),
-        reply_markup=get_manager_request_list_kb(items, 1, 1),
-        parse_mode="HTML"
-    )
+    await _send_manager_list(message, db, "returned", lang, get_completed_requests_submenu(language=lang))
 
 
 @router.message(F.text.in_(ADMIN_NOT_ACCEPTED_TEXTS))
 async def list_unaccepted_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Показать непринятые заявки (выполненные, но не принятые заявителем)"""
+    """Непринятые заявки: подтверждены менеджером, но не приняты заявителем."""
     lang = language
-
-    # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
-
-    # Непринятые заявки: подтверждены менеджером (manager_confirmed = True), но не приняты заявителем (статус != "Принято")
-    requests = AdminHandlerService(db).list_awaiting_applicant(limit=20)
-
-    if not requests:
-        await message.answer(
-            get_text("admin.handlers.no_unaccepted_requests", language=lang),
-            reply_markup=get_completed_requests_submenu(language=lang),
-            parse_mode="HTML"
-        )
-        return
-
-    # Форматируем список заявок с указанием времени ожидания
-    items = []
-    now = datetime.now(timezone.utc)
-
-    for r in requests:
-        # Вычисляем время ожидания с момента завершения
-        completed_at = r.completed_at if r.completed_at else r.updated_at
-        if completed_at:
-            # Обеспечиваем что completed_at timezone-aware
-            if completed_at.tzinfo is None:
-                from datetime import timezone as dt_tz
-                completed_at = completed_at.replace(tzinfo=dt_tz.utc)
-
-            waiting_time = now - completed_at
-            days = waiting_time.days
-            hours = waiting_time.seconds // 3600
-            minutes = (waiting_time.seconds % 3600) // 60
-
-            if days > 0:
-                time_str = f"{days}д {hours}ч"
-            elif hours > 0:
-                time_str = f"{hours}ч {minutes}м"
-            else:
-                time_str = f"{minutes}м"
-        else:
-            time_str = get_text("admin.handlers.time_unknown", language=lang)
-
-        item = {
-            "request_number": r.request_number,
-            "category": get_category_display(resolve_category_key(r.category), language=lang),
-            "address": r.address or get_text("admin.handlers.address_not_specified", language=lang),
-            "status": f"⏳ {time_str}"
-        }
-        items.append(item)
-
-    from uk_management_bot.keyboards.admin import get_manager_request_list_kb
-    await message.answer(
-        get_text("admin.handlers.unaccepted_requests_title", language=lang).format(count=len(requests)),
-        reply_markup=get_manager_request_list_kb(items, 1, 1),
-        parse_mode="HTML"
-    )
+    await _send_manager_list(message, db, "unaccepted", lang, get_completed_requests_submenu(language=lang))
 
 
 @router.message(F.text.in_(ADMIN_BACK_TO_MENU_TEXTS))
@@ -511,28 +401,11 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         )
         return
     
-    # Архив: только завершенные статусы (Выполнена, Исполнено, Принято, Отменена)
-    requests = AdminHandlerService(db).list_archive_requests(limit=10)
-    if not requests:
-        await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
-        return
-    # Каждую заявку отправляем отдельным сообщением
-    for r in requests:
-        # A9-P2-2: адрес/категория/примечания — пользовательский текст в
-        # HTML-сообщении; экранируем после обрезки (в БД — сырой текст).
-        addr = html.escape(r.address[:60]) + ("…" if len(r.address) > 60 else "")
-        text = (
-            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {html.escape(r.category or '')}\n"
-            + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
-            + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
-        )
-        if r.notes and r.notes.strip():
-            if r.status == REQUEST_STATUS_CANCELLED:
-                text += "\n" + get_text("admin.handlers.archive_cancel_reason", language=lang).format(reason=html.escape(r.notes.strip()))
-            else:
-                text += "\n" + get_text("admin.handlers.archive_notes", language=lang).format(notes=html.escape(r.notes.strip()))
-        await message.answer(text)
-    await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
+    # Архив — тот же листаемый список, что и остальные: раньше сюда сыпались
+    # десять заявок отдельными сообщениями, а одиннадцатая была недоступна.
+    # Заявка открывается карточкой; действий у архивной нет — только просмотр.
+    await _send_manager_list(message, db, "archive", lang, get_manager_main_keyboard(language=lang))
+
 
 @router.message(F.text.in_(ADMIN_PURCHASE_TEXTS))
 async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):

@@ -202,9 +202,12 @@ def test_repeated_return_adds_engineers_job_only_with_flag():
     plain = _plan([_intent(Action.APPLICANT_RETURN)])
     flagged = _plan([SimpleNamespace(kind="notify", data={
         "action": Action.APPLICANT_RETURN.value, "repeated_return": True})])
-    assert [key for _, _, key in plain] == ["notifications.workflow.returned_for_rework"]
+    # первой идёт карточка решения менеджерам (этап «карточки-решения»)
+    assert [key for _, _, key in plain] == [
+        "notifications.manager.returned", "notifications.workflow.returned_for_rework"]
     assert [key for _, _, key in flagged] == [
-        "notifications.workflow.returned_for_rework", "notifications.workflow.repeated_return"]
+        "notifications.manager.returned", "notifications.workflow.returned_for_rework",
+        "notifications.workflow.repeated_return"]
 
 
 def test_engineer_texts_render_materials_and_count():

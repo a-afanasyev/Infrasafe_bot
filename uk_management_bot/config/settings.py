@@ -163,6 +163,13 @@ class Settings:
         # только для первичной настройки (заведение первого менеджера) и локалки.
         self.ADMIN_COMMAND_ENABLED = os.getenv("ADMIN_COMMAND_ENABLED", "false").lower() == "true"
 
+        # Отключённые (серые) inline-кнопки Bot API 10.3 в карточке заявки менеджера.
+        # ВЫКЛЮЧЕНО по умолчанию: клиент Telegram, не знающий этого типа кнопки,
+        # показывает ВСЁ сообщение «неподдерживаемым» — без текста и остальных
+        # кнопок (живая проверка 2026-11-19; цвет и copy_text деградируют мягко).
+        # Включать, только когда у всех менеджеров площадки обновлён Telegram.
+        self.BOT_DISABLED_BUTTONS = os.getenv("BOT_DISABLED_BUTTONS", "false").lower() == "true"
+
         # ── Invites ────────────────────────────────────────────────────
         self.INVITE_SECRET = os.getenv("INVITE_SECRET")
         if not self.INVITE_SECRET and not self.DEBUG:

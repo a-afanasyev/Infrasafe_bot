@@ -128,7 +128,9 @@ class TestAdminClarifyHandlerOpensFlow:
         )
 
         # The request_number must be stashed in state.
-        state.update_data.assert_awaited_once_with(request_number="240520-001")
+        # (вторым вызовом хендлер запоминает id сообщения-подсказки — итог
+        # диалога потом пишется в неё же.)
+        state.update_data.assert_any_await(request_number="240520-001")
 
         # The prompt was sent (no silent 'Ошибка' toast).
         cb.message.edit_text.assert_awaited_once()

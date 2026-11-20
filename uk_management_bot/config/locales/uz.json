@@ -85,6 +85,8 @@
       "back_nav": "🔙 Orqaga",
       "test_middleware": "🧪 Middleware test",
       "reassign_request": "🔄 Qayta tayinlash",
+      "copy_number": "📋 Raqamni nusxalash",
+      "copy_phone": "📞 Telefonni nusxalash",
       "change_category": "🏷 Kategoriya",
       "assign_executor_to_request": "👤 Ijrochi tayinlash",
       "back_to_request": "← Arizaga qaytish"
@@ -124,8 +126,7 @@
       "media_sent": "✅ Mediafayllar yuborildi",
       "error_loading_media": "Mediafayllarni yuklashda xatolik yuz berdi",
       "no_access_confirm": "Arizalarni tasdiqlash uchun ruxsat yo'q",
-      "notify_applicant_completed": "✅ <b>Sizning arizangiz #{request_number} bajarildi!</b>\n\nIltimos, ish natijalarini ko'rib chiqing va arizani qabul qiling.\nAsosiy menyuda '✅ Qabul qilishni kutmoqda' bo'limiga o'ting.",
-      "request_confirmed": "✅ Ariza #{request_number} tasdiqlandi!\n\nHolat 'Bajarildi' ga o'zgartirildi.\nAriza beruvchiga qabul qilish haqida xabar yuborildi.",
+      "request_confirmed": "✅ Ariza #{request_number} tasdiqlandi!\n\nHolat 'Yakunlandi' ga o'zgartirildi.\nAriza beruvchiga qabul qilish haqida xabar yuborildi.",
       "error_confirming": "Tasdiqlashda xatolik yuz berdi",
       "notify_applicant_reconfirmed": "✅ <b>Sizning #{request_number} arizangiz bo'yicha qaytarish ko'rib chiqildi.</b>\n\nMenejer qaytarishni asossiz deb topdi — ariza qabul qilindi va yopildi.",
       "request_reconfirmed": "✅ #{request_number} ariza bo'yicha qaytarish rad etildi.\n\nHolat 'Qabul qilindi' ga o'zgartirildi.\nAriza beruvchiga xabar yuborildi.",
@@ -156,6 +157,7 @@
       "address_not_specified": "Manzil ko'rsatilmagan",
       "unaccepted_requests_title": "⏳ <b>Qabul qilinmagan arizalar</b> ({count}):\n\n<i>Vaqt ariza qabul qilishni qancha kutayotganini ko'rsatadi</i>",
       "archive_empty": "Arxiv bo'sh",
+      "archive_requests_title": "📦 Arizalar arxivi ({count}):",
       "archive_address": "Manzil: {address}",
       "archive_created": "Yaratilgan: {created_at}",
       "archive_cancel_reason": "💬 Rad etish sababi: {reason}",
@@ -357,6 +359,7 @@
   },
   "comments": {
     "comment_added_alert": "✅ Izoh muvaffaqiyatli qo'shildi!",
+    "history_title": "📝 Izohlar tarixi:",
     "comment_cancelled": "❌ Izoh qo'shish bekor qilindi",
     "comment_cancelled_alert": "❌ Izoh qo'shish bekor qilindi",
     "comment_data_not_found": "❌ Xatolik: izoh ma'lumotlari topilmadi",
@@ -2242,7 +2245,6 @@
       "media_saved": "✅ Media saqlandi.\n\nYana fayllar biriktirishingiz yoki yakunlash uchun 'O'tkazib yuborish' tugmasini bosing.",
       "media_save_failed": "Mediani saqlab bo'lmadi. Qaytadan urinib ko'ring.",
       "error_saving_media": "Mediani saqlashda xatolik yuz berdi",
-      "manager_return_notification": "⚠️ <b>Buyurtma arizachi tomonidan qaytarildi!</b>\n\n📋 Buyurtma #{request_number}\n📂 Kategoriya: {category}\n\n<b>Qaytarish sababi:</b>\n{return_reason}\n\n'Bajarilgan buyurtmalar' bo'limida ko'rib chiqish talab qilinadi.",
       "request_returned_success": "✅ <b>Buyurtma #{request_number} qaytarildi</b>\n\nSizning izohlaringiz menejerga yuborildi.\nBuyurtma ko'rib chiqiladi va tuzatiladi.",
       "error_returning_request": "Buyurtmani qaytarishda xatolik yuz berdi",
       "pending_acceptance_title": "✅ Qabul qilishni kutmoqda",
@@ -2533,6 +2535,12 @@
       "return_reason_line": "\n\n📝 Sabab: {reason}",
       "purchase_engineer": "💰 <b>#{request_number} ariza bo'yicha xarid</b>\n📂 {category}\n📍 {address}\n📦 Kerak: {materials}",
       "repeated_return": "🔁 <b>#{request_number} ariza {count}-marta qayta ishlashga qaytarildi</b>\n📂 {category}\n📍 {address}\nSababini ko'rib chiqish kerak."
+    },
+    "manager": {
+      "review": "🔎 <b>#{request_number} arizasi bo‘yicha ish bajarildi — tekshiruvingizni kutmoqda</b>\n📂 {category}\n📍 {address}",
+      "returned": "↩️ <b>Arizachi #{request_number} arizasi bo‘yicha ishni qaytardi</b>\n📂 {category}\n📍 {address}",
+      "unassigned": "🆕 <b>#{request_number} arizasi ijrochisiz qoldi</b>\n📂 {category}\n📍 {address}\n📝 {description}",
+      "already_handled": "Allaqachon ko‘rib chiqilgan: {status}"
     },
     "executor_problem": {
       "message": "⚠️ <b>#{request_number} arizasi bo‘yicha muammo</b>\n\n👷 Ijrochi: {executor}\n📍 {address}\n\n❗ {problem}{details}",

@@ -1,4 +1,8 @@
+import asyncio
 import logging
+
+from aiogram.exceptions import TelegramNetworkError
+
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 
@@ -50,7 +54,17 @@ async def send_to_user(bot, user_telegram_id: int, text: str, reply_markup=None)
         kwargs = {"request_timeout": SEND_TIMEOUT}
         if reply_markup is not None:
             kwargs["reply_markup"] = reply_markup
-        await bot.send_message(user_telegram_id, text, **kwargs)
+        try:
+            await bot.send_message(user_telegram_id, text, **kwargs)
+        except TelegramNetworkError as e:
+            # Telegram рвёт простаивающее keep-alive-соединение, и первый запрос
+            # по нему падает, не дойдя до сервера (живой прогон 2026-11-20:
+            # сообщение одному получателю терялось). Один повтор — по новому
+            # соединению. Таймаут не повторяем: запрос мог дойти, а цикл по
+            # получателям и так ждал SEND_TIMEOUT.
+            if isinstance(e.__context__, asyncio.TimeoutError):
+                raise
+            await bot.send_message(user_telegram_id, text, **kwargs)
         return True
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение пользователю {user_telegram_id}: {e}")
