@@ -116,7 +116,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
                 address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"mview_{request_number}")]
             ])
         )
 
@@ -273,7 +273,7 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
         await callback.message.edit_text(
             prompt_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
+                [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"mview_{request_number}")]
             ])
         )
 

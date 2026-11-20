@@ -2245,7 +2245,6 @@
       "media_saved": "✅ Media saqlandi.\n\nYana fayllar biriktirishingiz yoki yakunlash uchun 'O'tkazib yuborish' tugmasini bosing.",
       "media_save_failed": "Mediani saqlab bo'lmadi. Qaytadan urinib ko'ring.",
       "error_saving_media": "Mediani saqlashda xatolik yuz berdi",
-      "manager_return_notification": "⚠️ <b>Buyurtma arizachi tomonidan qaytarildi!</b>\n\n📋 Buyurtma #{request_number}\n📂 Kategoriya: {category}\n\n<b>Qaytarish sababi:</b>\n{return_reason}\n\n'Bajarilgan buyurtmalar' bo'limida ko'rib chiqish talab qilinadi.",
       "request_returned_success": "✅ <b>Buyurtma #{request_number} qaytarildi</b>\n\nSizning izohlaringiz menejerga yuborildi.\nBuyurtma ko'rib chiqiladi va tuzatiladi.",
       "error_returning_request": "Buyurtmani qaytarishda xatolik yuz berdi",
       "pending_acceptance_title": "✅ Qabul qilishni kutmoqda",

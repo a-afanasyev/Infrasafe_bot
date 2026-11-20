@@ -111,3 +111,33 @@ async def test_comment_filter_with_same_result_is_not_an_error(monkeypatch):
     await rc.handle_view_comments_by_type(callback, SimpleNamespace(), language="ru")
 
     callback.answer.assert_awaited_once_with()
+
+
+class TestPromptCancelDropsPendingInput:
+    """«Отмена» в запросе причины отклонения и закупа вела в общую карточку
+    (`view_`) и не снимала ожидание ввода: следующее сообщение менеджера
+    отменяло заявку. Теперь — в карточку менеджера, которая состояние чистит."""
+
+    def test_cancel_buttons_lead_to_manager_card(self):
+        import inspect
+
+        from uk_management_bot.handlers.admin import actions
+
+        source = inspect.getsource(actions)
+        assert 'callback_data=f"view_{request_number}"' not in source
+        assert source.count('language=lang), callback_data=f"mview_{request_number}")') == 2
+
+    @pytest.mark.asyncio
+    async def test_opening_card_clears_state(self, monkeypatch):
+        from uk_management_bot.handlers.admin import views
+
+        monkeypatch.setattr(views, "has_admin_access", lambda **_: True)
+        svc = SimpleNamespace(get_request_by_number=lambda n: None)
+        monkeypatch.setattr(views, "AdminHandlerService", lambda db: svc)
+        state = SimpleNamespace(clear=AsyncMock())
+        callback = SimpleNamespace(data=f"mview_{NUMBER}", from_user=SimpleNamespace(id=1),
+                                   answer=AsyncMock(), message=SimpleNamespace())
+
+        await views.handle_manager_view_request(callback, db=None, state=state)
+
+        state.clear.assert_awaited_once()

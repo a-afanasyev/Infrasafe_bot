@@ -182,7 +182,7 @@ def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, 
 
 @router.callback_query(F.data.startswith("mview_"))
 @router.callback_query(ManagerListCb.filter())
-async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", callback_data: ManagerListCb = None):
+async def handle_manager_view_request(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", callback_data: ManagerListCb = None, state: FSMContext = None):
     """Карточка заявки менеджера.
 
     Два входа: `ml:<вид>:<страница>:<номер>` из списка — тогда «Назад» вернёт на
@@ -198,6 +198,13 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         if not has_admin_access(roles=roles, user=user):
             await callback.answer(get_text("admin.handlers.no_access_view_requests", language=lang), show_alert=True)
             return
+
+        # Открыл карточку — значит, бросил начатый ввод (причина отклонения,
+        # материалы закупа, уточнение). Без сброса следующее сообщение менеджера
+        # было бы принято за причину и, например, отменило бы заявку: сюда ведёт
+        # «Отмена» этих запросов.
+        if state is not None:
+            await state.clear()
 
         back = None
         if callback_data is not None:
