@@ -48,7 +48,7 @@ from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 
 from ._router import router
 from .elevator_hint import send_elevator_hint
-from .lists import _MANAGER_LISTS, build_manager_list, edit_quiet
+from .lists import _MANAGER_LISTS, _waiting_suffix, build_manager_list, edit_quiet
 from .shared import (
     already_handled_text,
     close_prompt,
@@ -260,8 +260,25 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                     executor_name = html.escape(display_name(assigned_executor))
                     message_text += get_text("admin.handlers.assigned_executor", language=lang).format(executor_name=executor_name) + "\n"
 
+        elif request.executor_id:
+            # Исполнитель стоит в заявке, а активной строки назначения нет
+            # (перенос, старые данные) — менеджер всё равно должен видеть, чья она.
+            assigned_executor = svc.get_user_by_id(request.executor_id)
+            if assigned_executor:
+                message_text += get_text("admin.handlers.assigned_executor", language=lang).format(
+                    executor_name=html.escape(display_name(assigned_executor))) + "\n"
+
         if request.notes:
             message_text += get_text("admin.handlers.request_detail_notes", language=lang).format(notes=html.escape(request.notes)) + "\n"
+
+        # Причины возврата: без них решение «принять или вернуть» принималось
+        # бы вслепую. Подписи — те же, что видит житель (request_helpers).
+        for reason, label_key in (
+            (request.return_reason, "requests.applicant_return_reason_label"),
+            (request.manager_return_reason, "requests.manager_return_reason_label"),
+        ):
+            if reason:
+                message_text += f"\n{get_text(label_key, language=lang)} {html.escape(reason)}\n"
 
         # Проверяем наличие медиафайлов. Фотоотчёт: SSOT — media-service
         # (дашборд/TWA грузят туда, минуя legacy-поле), фолбэк — completion_media.
@@ -273,24 +290,10 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
         # Для ожидающих приёмки заявителем — сколько уже ждём.
         if is_awaiting_applicant(request):
-            from datetime import datetime, timezone
-            completed_at = request.completed_at if request.completed_at else request.updated_at
-            if completed_at:
-                if completed_at.tzinfo is None:
-                    completed_at = completed_at.replace(tzinfo=timezone.utc)
-                waiting_time = datetime.now(timezone.utc) - completed_at
-                days = waiting_time.days
-                hours = waiting_time.seconds // 3600
-                minutes = (waiting_time.seconds % 3600) // 60
-
-                if days > 0:
-                    time_str = f"{days}д {hours}ч"
-                elif hours > 0:
-                    time_str = f"{hours}ч {minutes}м"
-                else:
-                    time_str = f"{minutes}м"
-
-                message_text += "\n" + get_text("admin.handlers.waiting_acceptance", language=lang).format(time_str=time_str) + "\n"
+            since = request.completed_at or request.updated_at
+            if since:
+                message_text += "\n" + get_text("admin.handlers.waiting_acceptance", language=lang).format(
+                    time_str=_waiting_suffix(since, lang).removeprefix("⏳ ")) + "\n"
 
         keyboard = build_manager_card_keyboard(
             request, active_assignment=active_assignment, has_media=has_media,
@@ -465,21 +468,6 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
         await notify_channel_status_changed(
             callback.bot, request, outcome.old_status, outcome.public_status)
 
-        # Дополнительное уведомление заявителю с инструкцией
-        applicant = request.user if request else None
-        if applicant and applicant.telegram_id:
-            try:
-                bot = callback.bot
-
-                notification_text = get_text("admin.handlers.notify_applicant_completed", language=lang).format(
-                    request_number=request.format_number_for_display()
-                )
-
-                await bot.send_message(applicant.telegram_id, notification_text)
-                logger.info(f"✅ Уведомление о подтверждении заявки {request_number} отправлено заявителю {applicant.telegram_id}")
-            except Exception as e:
-                logger.error(f"Ошибка при отправке уведомления заявителю: {e}")
-
         await callback.message.edit_text(
             get_text("admin.handlers.request_confirmed", language=lang).format(request_number=request_number)
         )
@@ -650,7 +638,10 @@ async def handle_return_to_work_cancel(callback: CallbackQuery, state: FSMContex
     request_number = callback.data.replace("rtw_cancel_", "")
     await callback.message.edit_text(
         get_text("admin.handlers.return_to_work_cancelled", language=language).format(
-            request_number=request_number)
+            request_number=request_number),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text=get_text("admin.keyboards.back_to_request", language=language),
+            callback_data=f"mview_{request_number}")]]),
     )
 
 

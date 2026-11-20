@@ -169,9 +169,9 @@ class CommentService:
             str: Отформатированный текст комментариев
         """
         if not comments:
-            return "Комментариев пока нет"
+            return get_text("comments.no_comments_yet", language=language)
         
-        formatted_text = "📝 История комментариев:\n\n"
+        formatted_text = get_text("comments.history_title", language=language) + "\n\n"
         
         for comment in comments:
             # Получаем информацию о пользователе
@@ -188,7 +188,7 @@ class CommentService:
             type_emoji = self._get_comment_type_emoji(comment.comment_type)
             
             # Форматируем текст комментария
-            formatted_text += f"{type_emoji} **{user_name}** ({date_str})\n"
+            formatted_text += f"{type_emoji} <b>{user_name}</b> ({date_str})\n"
             
             # Добавляем информацию о статусе для изменений статуса
             if comment.comment_type == COMMENT_TYPE_STATUS_CHANGE and comment.previous_status and comment.new_status:

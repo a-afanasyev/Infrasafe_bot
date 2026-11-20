@@ -1,7 +1,7 @@
 """Адресаты уведомлений: DTO получателя и выборка «у кого есть действие».
 
 Получатель — одобренный, не удалённый пользователь с живым ботом
-(`bot_blocked_at IS NULL`, есть `telegram_id`). Кому слать решает действие
+(`bot_blocked_at IS NULL`, `telegram_id` > 0). Кому слать решает действие
 каталога (authz), а не имя роли: переопределения из админки ролей учитываются.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _with_action_stmt(action_key: str) -> Optional[Select]:
             User.status == "approved",
             User.deleted_at.is_(None),
             User.bot_blocked_at.is_(None),
-            User.telegram_id.is_not(None),
+            User.telegram_id > 0,
         )
         .order_by(User.id)
     )

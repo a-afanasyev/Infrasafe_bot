@@ -126,8 +126,7 @@
       "media_sent": "✅ Mediafayllar yuborildi",
       "error_loading_media": "Mediafayllarni yuklashda xatolik yuz berdi",
       "no_access_confirm": "Arizalarni tasdiqlash uchun ruxsat yo'q",
-      "notify_applicant_completed": "✅ <b>Sizning arizangiz #{request_number} bajarildi!</b>\n\nIltimos, ish natijalarini ko'rib chiqing va arizani qabul qiling.\nAsosiy menyuda '✅ Qabul qilishni kutmoqda' bo'limiga o'ting.",
-      "request_confirmed": "✅ Ariza #{request_number} tasdiqlandi!\n\nHolat 'Bajarildi' ga o'zgartirildi.\nAriza beruvchiga qabul qilish haqida xabar yuborildi.",
+      "request_confirmed": "✅ Ariza #{request_number} tasdiqlandi!\n\nHolat 'Yakunlandi' ga o'zgartirildi.\nAriza beruvchiga qabul qilish haqida xabar yuborildi.",
       "error_confirming": "Tasdiqlashda xatolik yuz berdi",
       "notify_applicant_reconfirmed": "✅ <b>Sizning #{request_number} arizangiz bo'yicha qaytarish ko'rib chiqildi.</b>\n\nMenejer qaytarishni asossiz deb topdi — ariza qabul qilindi va yopildi.",
       "request_reconfirmed": "✅ #{request_number} ariza bo'yicha qaytarish rad etildi.\n\nHolat 'Qabul qilindi' ga o'zgartirildi.\nAriza beruvchiga xabar yuborildi.",
@@ -360,6 +359,7 @@
   },
   "comments": {
     "comment_added_alert": "✅ Izoh muvaffaqiyatli qo'shildi!",
+    "history_title": "📝 Izohlar tarixi:",
     "comment_cancelled": "❌ Izoh qo'shish bekor qilindi",
     "comment_cancelled_alert": "❌ Izoh qo'shish bekor qilindi",
     "comment_data_not_found": "❌ Xatolik: izoh ma'lumotlari topilmadi",

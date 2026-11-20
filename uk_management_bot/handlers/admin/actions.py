@@ -171,7 +171,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
                 address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_clarification")]
+                [InlineKeyboardButton(text=get_text("common.cancel", language=lang), callback_data="cancel_clarification")]
             ])
         )
         

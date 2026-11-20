@@ -84,7 +84,8 @@ def get_comment_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMar
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_comments_list_keyboard(request_number: str, language: str = "ru") -> InlineKeyboardMarkup:
+def get_comments_list_keyboard(request_number: str, language: str = "ru",
+                               back_callback: str | None = None) -> InlineKeyboardMarkup:
     """
     Клавиатура для списка комментариев
     
@@ -123,7 +124,7 @@ def get_comments_list_keyboard(request_number: str, language: str = "ru") -> Inl
         [
             InlineKeyboardButton(
                 text=get_text("request_comments.keyboards.back_to_request", language=language),
-                callback_data=RequestCallbackHelper.create_callback_data_with_request_number("view_request_", request_number)
+                callback_data=back_callback or RequestCallbackHelper.create_callback_data_with_request_number("view_request_", request_number)
             )
         ]
     ]
