@@ -49,6 +49,7 @@ import {
   Check,
   ArrowUpDown,
   Sparkles,
+  ClipboardList,
   Megaphone,
   UserCog,
   Bot,
@@ -161,6 +162,10 @@ const NAV_ENTRIES: NavEntry[] = [
   // Уборка: план домов, привязка уборщиц, нагрузка. DARK за VITE_CLEANING_ENABLED.
   ...(import.meta.env.VITE_CLEANING_ENABLED === 'true'
     ? [{ to: '/dashboard/cleaning', labelKey: 'nav.cleaning', Icon: Sparkles, action: 'cleaning.read' as const }]
+    : []),
+  // Паспорта домов (форма №3824). DARK за VITE_PASSPORT_ENABLED.
+  ...(import.meta.env.VITE_PASSPORT_ENABLED === 'true'
+    ? [{ to: '/dashboard/passports', labelKey: 'nav.passports', Icon: ClipboardList, action: 'passport.read' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.

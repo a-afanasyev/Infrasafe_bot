@@ -327,6 +327,14 @@ class Settings:
         # уборщицы» в боте не срабатывает. Одинаково для бота и API.
         self.CLEANING_ENABLED = os.getenv("CLEANING_ENABLED", "False").lower() == "true"
 
+        # ── Паспорт дома (форма №3824) ─────────────────────────────────
+        # DARK-гейт: без флага роутер /api/v2/passports отвечает 404. Область и
+        # район — первые две строки адреса формы (пункт 1.1): в справочнике
+        # домов их нет, на площадке они одни на все дома. Несекретные.
+        self.PASSPORT_ENABLED = os.getenv("PASSPORT_ENABLED", "False").lower() == "true"
+        self.PASSPORT_REGION: str = os.getenv("PASSPORT_REGION", "").strip()
+        self.PASSPORT_DISTRICT: str = os.getenv("PASSPORT_DISTRICT", "").strip()
+
         # ── Group Intake (выделенный бот, план rev.3) ──────────────────
         # Классификация «заявка/нет» — Anthropic API (structured outputs),
         # модель — pinned snapshot. Ключ и токен — ТОЛЬКО из Doppler.

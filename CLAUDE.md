@@ -35,6 +35,7 @@
 - **ИИ-менеджер** (`mode="ai"` автоменеджера): DARK за `AI_MANAGER_ENABLED` (бот+API), общий `ANTHROPIC_API_KEY`; LLM только триаж текста, исполнитель — rule-engine; общий LLM-клиент `services/llm/`. Детали → `docs/tech/AI_MANAGER.md`.
 - **Мониторинг отключений** (`/api/v2/news-watch`, миграция 028, контейнер `uk-news-watcher` = Telethon-юзербот за профилем `news-watch`): DARK за `NEWS_WATCH_ENABLED` (api) и `VITE_NEWS_WATCH_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/tech/NEWS_WATCH.md`.
 - **Модуль «Уборка»** (`/api/v2/cleaning`, миграция 034): за `CLEANING_ENABLED` (бот+API) и `VITE_CLEANING_ENABLED` (фронт, build-arg), включён на обеих площадках с 2026-11-16; префикс заявлен в edge-allowlist обеих площадок; медиа-сервис выкатывать ДО API. Первый этаж снимается тремя точками. Детали → `docs/CLEANING_MODULE.md`, инструкции → `docs/manuals/cleaning-*.md`.
+- **Модуль «Паспорт дома»** (`/api/v2/passports`, миграция 036, форма №3824): DARK за `PASSPORT_ENABLED` (бот+API) и `VITE_PASSPORT_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения; медиа-сервис выкатывать ДО API. Изменение схемы = `SCHEMA_VERSION`+1; после начала заполнения `alembic downgrade` не выполнять. Детали → `docs/PASSPORT_MODULE.md`, инструкции → `docs/manuals/passport-*.md`.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи, Doppler-токены) — никогда не коммитить, не выводить.

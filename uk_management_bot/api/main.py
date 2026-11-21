@@ -60,6 +60,7 @@ from uk_management_bot.api.cleaning.router_resident import (
 )
 from uk_management_bot.api.work_reports.public_router import router as work_reports_public_router
 from uk_management_bot.api.elevators.public_router import router as elevators_public_router
+from uk_management_bot.api.passports.router import router as passports_router
 from uk_management_bot.api.auto_manager.router import router as auto_manager_router
 from uk_management_bot.api.webhooks.router import router as webhooks_router
 from uk_management_bot.api.registration.router import router as registration_router
@@ -249,6 +250,8 @@ app.include_router(cleaning_exec_router, prefix="/api/v2/cleaning", tags=["clean
 app.include_router(cleaning_control_router, prefix="/api/v2/cleaning/control", tags=["cleaning"])
 app.include_router(cleaning_resident_router, prefix="/api/v2/cleaning", tags=["cleaning"])
 app.include_router(cleaning_public_router, prefix="/api/v2/public", tags=["public"])
+# ⚠️ Новый префикс: на проде edge требует добавления в allowlist ДО включения. Гейт — PASSPORT_ENABLED.
+app.include_router(passports_router, prefix="/api/v2/passports", tags=["passports"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
 app.include_router(health_router)

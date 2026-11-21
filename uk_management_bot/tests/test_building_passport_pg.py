@@ -1,0 +1,228 @@
+"""Гонки правок паспорта дома — только реальный PostgreSQL.
+
+sqlite-тесты (tests/services/test_building_passport_service.py) проверяют
+правила, но блокировка строки паспорта под параллельными запросами там не
+работает. Здесь запросы идут разными соединениями к DATABASE_URL бота.
+
+Данные — с id из диапазона 99xxxx; teardown удаляет всё. Таблиц модуля нет
+(миграция 036 не применена) — тест пропускается.
+"""
+import asyncio
+import os
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import delete, func, select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.building_passport import (
+    BuildingPassport,
+    BuildingPassportEvent,
+    BuildingPassportPhoto,
+    BuildingPassportRevision,
+)
+from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.services.building_passport import service as svc
+from uk_management_bot.services.building_passport import validation
+from uk_management_bot.services.building_passport.service import Actor, PassportError
+
+YARD = BUILDING = 990101
+OTHERS = (990102, 990103)  # для ссылок на общий объект
+ALL = (BUILDING, *OTHERS)
+ENGINEER, MANAGER = Actor(None, "PG инженер"), Actor(None, "PG менеджер")
+
+
+def _async_url() -> str:
+    url = os.environ.get("DATABASE_URL", "")
+    if not url.startswith("postgresql"):
+        pytest.skip("postgres-only concurrency test (DATABASE_URL not postgres)")
+    return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+
+async def _wipe(factory) -> None:
+    async with factory() as db:
+        ids = select(BuildingPassport.id).where(BuildingPassport.building_id.in_(ALL))
+        await db.execute(delete(BuildingPassportEvent).where(BuildingPassportEvent.passport_id.in_(ids)))
+        await db.execute(delete(BuildingPassportPhoto).where(BuildingPassportPhoto.passport_id.in_(ids)))
+        await db.execute(delete(BuildingPassportRevision).where(BuildingPassportRevision.passport_id.in_(ids)))
+        await db.execute(delete(BuildingPassport).where(BuildingPassport.building_id.in_(ALL)))
+        await db.execute(delete(Building).where(Building.id.in_(ALL)))
+        await db.execute(delete(Yard).where(Yard.id == YARD))
+        await db.commit()
+
+
+@pytest_asyncio.fixture
+async def factory():
+    engine = create_async_engine(_async_url(), pool_size=8, max_overflow=4)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as db:
+        if (await db.execute(text("SELECT to_regclass('building_passports')"))).scalar() is None:
+            await engine.dispose()
+            pytest.skip("таблиц модуля «Паспорт дома» нет — миграция 036 не применена")
+    await _wipe(maker)
+    async with maker() as db:
+        db.add(Yard(id=YARD, name=f"passport-pg-{YARD}", is_active=True))
+        await db.flush()
+        db.add_all([Building(id=i, yard_id=YARD, address=f"passport-pg-{i}", entrance_count=1,
+                             floor_count=9, is_active=True) for i in ALL])
+        await db.commit()
+    try:
+        yield maker
+    finally:
+        await _wipe(maker)
+        await engine.dispose()
+
+
+async def _run(factory, call) -> str:
+    """Один запрос в своей транзакции: «ok» или код отказа."""
+    async with factory() as db:
+        try:
+            await call(db)
+        except PassportError as exc:
+            await db.rollback()
+            return exc.code
+        await db.commit()
+        return "ok"
+
+
+def _patch(expected: int, **kw):
+    return lambda db: svc.patch(db, BUILDING, ENGINEER, expected_version=expected, **kw)
+
+
+async def _view(factory) -> dict:
+    async with factory() as db:
+        return await svc.view(db, BUILDING)
+
+
+async def _complete(factory) -> int:
+    assert await _run(factory, _patch(0, meta={"inspection_date": "2026-11-20"})) == "ok"
+    view = await _view(factory)
+    groups = validation._groups()
+    assert await _run(factory, _patch(
+        view["version"],
+        unknown={k: "нет документов" for k in view["missing"] if k not in groups},
+        absent={k: True for k in view["missing"] if k in groups})) == "ok"
+    return (await _view(factory))["version"]
+
+
+@pytest.mark.asyncio
+async def test_first_writes_race_leaves_one_passport(factory):
+    results = await asyncio.gather(*[
+        _run(factory, _patch(0, values={key: value}))
+        for key, value in (("floors", 9), ("built_year", 2019), ("entrances", 4))])
+    assert "ok" in results and set(results) <= {"ok", "stale"}, results
+    async with factory() as db:
+        count = (await db.execute(select(func.count(BuildingPassport.id)).where(
+            BuildingPassport.building_id == BUILDING))).scalar_one()
+    assert count == 1
+    assert (await _view(factory))["version"] == results.count("ok")
+
+
+@pytest.mark.asyncio
+async def test_parallel_edits_of_different_fields_both_pass(factory):
+    assert await _run(factory, _patch(0, values={"floors": 9})) == "ok"
+    results = await asyncio.gather(
+        _run(factory, _patch(1, values={"built_year": 2019})),
+        _run(factory, _patch(1, values={"cadastre_no": "10:08:01"})))
+    assert results == ["ok", "ok"]
+    view = await _view(factory)
+    assert view["version"] == 3
+    assert (view["values"]["built_year"], view["values"]["cadastre_no"]) == (2019, "10:08:01")
+
+
+@pytest.mark.asyncio
+async def test_parallel_edits_of_the_same_field_one_is_stale(factory):
+    assert await _run(factory, _patch(0, values={"floors": 9})) == "ok"
+    results = await asyncio.gather(*[_run(factory, _patch(1, values={"floors": n})) for n in (10, 11, 12)])
+    assert sorted(results) == ["ok", "stale", "stale"], results
+    view = await _view(factory)
+    assert view["version"] == 2 and view["values"]["floors"] == (10, 11, 12)[results.index("ok")]
+
+
+@pytest.mark.asyncio
+async def test_edit_racing_with_signing_never_lands_in_the_revision(factory):
+    version = await _complete(factory)
+    assert await _run(factory, lambda db: svc.set_status(
+        db, BUILDING, ENGINEER, status="filled", expected_version=version)) == "ok"
+    version = (await _view(factory))["version"]
+
+    signed, edited = await asyncio.gather(
+        _run(factory, lambda db: svc.set_status(
+            db, BUILDING, MANAGER, status="signed", expected_version=version, can_sign=True)),
+        _run(factory, _patch(version, values={"floors": 77})))
+    # Побеждает ровно одна: либо подпись (правка видит «подписан»), либо правка (подпись устарела).
+    assert (signed, edited) in {("ok", "signed"), ("stale", "ok")}, (signed, edited)
+
+    async with factory() as db:
+        revisions = await svc.revisions(db, BUILDING)
+        if signed == "ok":
+            assert len(revisions) == 1
+            assert (await svc.revision(db, BUILDING, 1))["values"].get("floors") != 77
+        else:
+            assert revisions == []
+
+
+@pytest.mark.asyncio
+async def test_two_uploads_with_one_key_leave_one_photo_and_one_file(factory):
+    import uuid
+
+    from uk_management_bot.services.building_passport import photos
+
+    files: dict[int, str] = {}
+
+    async def find(ref):
+        return sorted(i for i, r in files.items() if r == ref)
+
+    async def upload(ref, user_id, data, mime, section):
+        await asyncio.sleep(0.05)
+        files[len(files) + 1] = ref
+        return len(files)
+
+    async def drop(media_id):
+        files.pop(media_id, None)
+
+    key, png = str(uuid.uuid4()), b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+    async def one() -> str:
+        try:
+            await photos.upload(factory, BUILDING, ENGINEER, section="playgrounds", op_key=key, photo_bytes=png,
+                                media=photos.Media(find=find, upload=upload, delete=drop))
+        except PassportError as exc:
+            return exc.code
+        return "ok"
+
+    # Паспорта ещё нет: гонка первых фото — проходит одна, остальные получают повторяемый отказ.
+    first = await asyncio.gather(one(), one(), one())
+    assert "ok" in first and set(first) <= {"ok", "in_progress"}, first
+    assert len(files) == 1
+
+    key = str(uuid.uuid4())  # паспорт есть: тот же ключ тремя запросами
+    results = await asyncio.gather(one(), one(), one())
+    assert sorted(results) == ["in_progress", "in_progress", "ok"], results
+    assert len(files) == 2
+    async with factory() as db:
+        rows = (await db.execute(select(BuildingPassportPhoto.state).join(BuildingPassport).where(
+            BuildingPassport.building_id == BUILDING))).scalars().all()
+    assert rows == ["done", "done"]
+
+
+@pytest.mark.asyncio
+async def test_parallel_links_never_form_a_chain(factory):
+    """A→B и B→C одновременно: цепочка не складывается — проходит не больше одной ссылки."""
+    a, b, c = ALL
+
+    async def link(house: int, primary: int) -> str:
+        return await _run(factory, lambda db: svc.patch(
+            db, house, ENGINEER, expected_version=1, shared_from={"plot": primary}))
+
+    for house in ALL:  # паспорта существуют — их строки можно блокировать
+        assert await _run(factory, lambda db, h=house: svc.patch(
+            db, h, ENGINEER, expected_version=0, values={"floors": 9})) == "ok"
+    results = await asyncio.gather(link(a, b), link(b, c))
+    # Кто проиграл — зависит от порядка: «основной сам ссылается» либо «на этот дом уже ссылаются».
+    assert "ok" in results and set(results) - {"ok"} <= {"shared_chain", "shared_referenced"}, results
+    assert results.count("ok") == 1, results
+    async with factory() as db:
+        links = {h: (await svc.view(db, h))["shared_from"] for h in ALL}
+    assert sum(bool(v) for v in links.values()) == 1, links

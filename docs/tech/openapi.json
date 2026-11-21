@@ -1478,6 +1478,34 @@
         "title": "Body_upload_photo_api_v2_cleaning_tasks__task_id__photos_post",
         "type": "object"
       },
+      "Body_upload_photo_api_v2_passports_buildings__building_id__photos_post": {
+        "properties": {
+          "op_key": {
+            "description": "UUID операции; повтор с ним же не создаёт второй файл",
+            "title": "Op Key",
+            "type": "string"
+          },
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG/PNG, до 8 МиБ",
+            "title": "Photo",
+            "type": "string"
+          },
+          "section": {
+            "description": "Ключ раздела схемы",
+            "maxLength": 40,
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo",
+          "section",
+          "op_key"
+        ],
+        "title": "Body_upload_photo_api_v2_passports_buildings__building_id__photos_post",
+        "type": "object"
+      },
       "BotCfg": {
         "properties": {
           "label": {
@@ -10000,6 +10028,150 @@
           "status"
         ],
         "title": "OwnerCheckOut",
+        "type": "object"
+      },
+      "PassportPatchIn": {
+        "additionalProperties": false,
+        "properties": {
+          "absent": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "maxProperties": 250,
+            "title": "Absent",
+            "type": "object"
+          },
+          "expected_version": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "meta": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 8,
+            "title": "Meta",
+            "type": "object"
+          },
+          "shared_from": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 8,
+            "title": "Shared From",
+            "type": "object"
+          },
+          "unknown": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 300,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 250,
+            "title": "Unknown",
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": true,
+            "maxProperties": 250,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "PassportPatchIn",
+        "type": "object"
+      },
+      "PassportReopenIn": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "reason"
+        ],
+        "title": "PassportReopenIn",
+        "type": "object"
+      },
+      "PassportSignIn": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "PassportSignIn",
+        "type": "object"
+      },
+      "PassportStatusIn": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "collecting",
+              "inspected",
+              "filled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "status"
+        ],
+        "title": "PassportStatusIn",
         "type": "object"
       },
       "PasswordLogin": {
@@ -23904,6 +24076,906 @@
         "summary": "Sources",
         "tags": [
           "news-watch"
+        ]
+      }
+    },
+    "/api/v2/passports": {
+      "get": {
+        "operationId": "list_passports_api_v2_passports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Passports Api V2 Passports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Passports",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}": {
+      "get": {
+        "operationId": "get_passport_api_v2_passports_buildings__building_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Passport Api V2 Passports Buildings  Building Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Passport",
+        "tags": [
+          "passports"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_passport_api_v2_passports_buildings__building_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PassportPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Passport Api V2 Passports Buildings  Building Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Passport",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/export.xlsx": {
+      "get": {
+        "description": "Рабочее состояние паспорта, с пометкой «черновик».",
+        "operationId": "export_working_api_v2_passports_buildings__building_id__export_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Working",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/history": {
+      "get": {
+        "operationId": "get_history_api_v2_passports_buildings__building_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get History Api V2 Passports Buildings  Building Id  History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get History",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos": {
+      "post": {
+        "description": "Фото раздела. 409 ``in_progress`` и 503 ``media_unavailable`` — повторить с тем же\nключом; 409 ``key_reused`` / ``photo_limit`` / ``signed``; 413/415/422 — файл, ключ, раздел.",
+        "operationId": "upload_photo_api_v2_passports_buildings__building_id__photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_photo_api_v2_passports_buildings__building_id__photos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Photo Api V2 Passports Buildings  Building Id  Photos Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Photo",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos/{photo_id}": {
+      "delete": {
+        "description": "Убрать фото из рабочего набора. Файл, вошедший в подписанную редакцию, остаётся в медиа.",
+        "operationId": "delete_photo_api_v2_passports_buildings__building_id__photos__photo_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Photo",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos/{photo_id}/file": {
+      "get": {
+        "operationId": "photo_file_api_v2_passports_buildings__building_id__photos__photo_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Photo File",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/reopen": {
+      "post": {
+        "operationId": "reopen_passport_api_v2_passports_buildings__building_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PassportReopenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reopen Passport Api V2 Passports Buildings  Building Id  Reopen Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reopen Passport",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/revisions": {
+      "get": {
+        "operationId": "list_revisions_api_v2_passports_buildings__building_id__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Revisions Api V2 Passports Buildings  Building Id  Revisions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Revisions",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/revisions/{revision_no}": {
+      "get": {
+        "operationId": "get_revision_api_v2_passports_buildings__building_id__revisions__revision_no__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_no",
+            "required": true,
+            "schema": {
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Revision No",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Revision Api V2 Passports Buildings  Building Id  Revisions  Revision No  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Revision",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/revisions/{revision_no}/export.xlsx": {
+      "get": {
+        "description": "Подписанная редакция — по её собственной копии схемы и эталона формы.",
+        "operationId": "export_revision_api_v2_passports_buildings__building_id__revisions__revision_no__export_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_no",
+            "required": true,
+            "schema": {
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Revision No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Revision",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/sign": {
+      "post": {
+        "operationId": "sign_passport_api_v2_passports_buildings__building_id__sign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PassportSignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sign Passport Api V2 Passports Buildings  Building Id  Sign Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sign Passport",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/status": {
+      "post": {
+        "operationId": "set_status_api_v2_passports_buildings__building_id__status_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PassportStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Status Api V2 Passports Buildings  Building Id  Status Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Status",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/export.xlsx": {
+      "get": {
+        "description": "Сводная по последним подписанным редакциям: дом в строке, пункт в столбце.",
+        "operationId": "export_summary_api_v2_passports_export_xlsx_get",
+        "parameters": [
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Summary",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/schema": {
+      "get": {
+        "operationId": "get_schema_api_v2_passports_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Schema Api V2 Passports Schema Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Schema",
+        "tags": [
+          "passports"
         ]
       }
     },
