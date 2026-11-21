@@ -71,6 +71,14 @@ from .cleaning import (
     CleaningTaskEvent,
 )
 
+# Паспорт дома: рабочий паспорт, подписанные редакции, журнал, фото
+from .building_passport import (
+    BuildingPassport,
+    BuildingPassportEvent,
+    BuildingPassportPhoto,
+    BuildingPassportRevision,
+)
+
 # Админка ролей: роли, их права и версия для сброса кэша прав
 from .rbac import RbacRole, RbacRolePermission, RbacState
 
@@ -135,4 +143,8 @@ __all__ = [
     'CleaningRules',
     'CleaningTask',
     'CleaningTaskEvent',
+    'BuildingPassport',
+    'BuildingPassportEvent',
+    'BuildingPassportPhoto',
+    'BuildingPassportRevision',
 ]

@@ -118,7 +118,7 @@ def official_uz(field: Field) -> Optional[str]:
     if field.label is None or not field.form_rows:
         return title
     cell = rows[(field.form_no, field.form_rows[0])]["cells"][0]
-    return cell if field.label == "own" else f"{title}: {cell}"
+    return cell if field.label == "own" else f"{title}: {cell}"  # html-raw: текст эталона формы, не ввод и не Telegram
 
 
 # ── узбекская кириллица → латиница (для интерфейса) ─────────────────────────

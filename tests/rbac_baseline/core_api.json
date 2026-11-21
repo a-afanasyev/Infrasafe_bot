@@ -1050,6 +1050,108 @@
     "_require_service_token"
    ]
   },
+  "GET /api/v2/passports": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/passports/buildings/{building_id}": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/passports/buildings/{building_id}/history": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/passports/buildings/{building_id}/revisions": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/passports/buildings/{building_id}/revisions/{revision_no}": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/passports/schema": {
+   "auth": "roles",
+   "allow": [
+    "inspector",
+    "manager",
+    "executor+inspector",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
   "GET /api/v2/payment-control/apartments/{apartment_id}": {
    "auth": "roles",
    "allow": [
@@ -1749,6 +1851,21 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ]
+  },
+  "PATCH /api/v2/passports/buildings/{building_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "PATCH /api/v2/profile": {
@@ -2621,6 +2738,49 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/passports/buildings/{building_id}/reopen": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/passports/buildings/{building_id}/sign": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/passports/buildings/{building_id}/status": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "executor+engineer",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
    ],
    "deps": [
     "_require_enabled"

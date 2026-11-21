@@ -134,6 +134,10 @@ _ACTIONS: tuple[Action, ...] = (
     _action("cleaning.work", {_E}, "Уборка: задания уборщицы и фото этажей", approved_only=True),
     _action("cleaning.read", {_M}, "Уборка: план домов, привязка, нагрузка, контроль", approved_only=True),
     _action("cleaning.manage", {_M}, "Уборка: правка планов, привязок и настроек", approved_only=True),
+    _action("passport.read", {_M, _I, ENGINEER}, "Паспорт дома: просмотр, журнал, редакции", approved_only=True),
+    _action("passport.edit", {_M, ENGINEER}, "Паспорт дома: заполнение и статус до «Заполнен»",
+            approved_only=True),
+    _action("passport.sign", {_M}, "Паспорт дома: подписание и возврат в работу", approved_only=True),
     _action("auto_manager.configure", {_M, _A}, "Настройка автоматического менеджера"),
     _action("work_reports.moderate", {_M}, "Модерация отчётов о работах", approved_only=True),
     # ---------------------------------------------------------- персонал и смены

@@ -377,6 +377,9 @@ STAFF_WIDE_ACTIONS = frozenset({
     # `cleaning.work` (уборщица, свои задания) сюда НЕ входит — её маршруты
     # идут в IDOR_COVERAGE с парой «чужое/своё задание».
     "cleaning.read", "cleaning.manage",
+    # Паспорт дома: паспорта всех домов площадки ведут инженер и менеджер,
+    # инспектор читает любой дом (как `addresses.read`) — владельца у паспорта нет.
+    "passport.read", "passport.edit", "passport.sign",
 })
 
 

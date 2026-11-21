@@ -73,6 +73,11 @@ services:
       # пока флаг выключен; бот читает тот же флаг. Несекретная переменная.
       - ELEVATORS_ENABLED=${ELEVATORS_ENABLED:-false}
       - CLEANING_ENABLED=${CLEANING_ENABLED:-false}
+      # DARK-гейт модуля «Паспорт дома»: /api/v2/passports → 404 при выключенном флаге.
+      # Область и район — строки адреса формы №3824 (п. 1.1). Несекретные.
+      - PASSPORT_ENABLED=${PASSPORT_ENABLED:-false}
+      - PASSPORT_REGION=${PASSPORT_REGION:-}
+      - PASSPORT_DISTRICT=${PASSPORT_DISTRICT:-}
       # A9-P2-4: команда бота /admin (любой аккаунт + общий ADMIN_PASSWORD → manager).
       # Выключена по умолчанию; в Doppler и .env прода НЕ задаётся. Включается разово
       # для заведения первого менеджера — см. .claude/skills/uk-deploy/SKILL.md.
@@ -264,6 +269,11 @@ services:
       # DARK-гейт модуля «Лифты» (Ф3a): весь /api/v2/elevators → 404 при выключенном флаге.
       - ELEVATORS_ENABLED=${ELEVATORS_ENABLED:-false}
       - CLEANING_ENABLED=${CLEANING_ENABLED:-false}
+      # DARK-гейт модуля «Паспорт дома»: /api/v2/passports → 404 при выключенном флаге.
+      # Область и район — строки адреса формы №3824 (п. 1.1). Несекретные.
+      - PASSPORT_ENABLED=${PASSPORT_ENABLED:-false}
+      - PASSPORT_REGION=${PASSPORT_REGION:-}
+      - PASSPORT_DISTRICT=${PASSPORT_DISTRICT:-}
       # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
