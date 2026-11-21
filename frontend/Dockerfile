@@ -35,6 +35,9 @@ ENV VITE_ELEVATORS_ENABLED=$VITE_ELEVATORS_ENABLED
 # Модуль «Уборка» (согласованно с backend CLEANING_ENABLED).
 ARG VITE_CLEANING_ENABLED=
 ENV VITE_CLEANING_ENABLED=$VITE_CLEANING_ENABLED
+# Модуль «Паспорт дома» — DARK по умолчанию (согласованно с backend PASSPORT_ENABLED).
+ARG VITE_PASSPORT_ENABLED=
+ENV VITE_PASSPORT_ENABLED=$VITE_PASSPORT_ENABLED
 
 # DARK-гейт раздела «Отключения» (мониторинг новостей): пусто = OFF.
 # Включение: --build-arg VITE_NEWS_WATCH_ENABLED=true (согласованно с backend NEWS_WATCH_ENABLED).

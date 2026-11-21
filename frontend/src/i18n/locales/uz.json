@@ -367,7 +367,96 @@
   "nameCase": {
     "menuItem": "F.I.Sh. bosh harflar bilan"
   },
+  "housePassport": {
+    "title": "Uy pasportlari",
+    "empty": "Uylar yo'q",
+    "progress": "To'ldirilgan",
+    "statusLabel": "Holat",
+    "status": {
+      "not_started": "Boshlanmagan",
+      "collecting": "Ma'lumot yig'ilmoqda",
+      "inspected": "Ko'rikdan o'tgan",
+      "filled": "To'ldirilgan",
+      "signed": "Imzolangan"
+    },
+    "sign": "Imzolash",
+    "reopen": "Ishga qaytarish",
+    "reopenReason": "Qaytarish sababi",
+    "revisionNo": "{{no}}-tahrir",
+    "tabs": {
+      "form": "Pasport",
+      "history": "Jurnal",
+      "revisions": "Tahrirlar"
+    },
+    "meta": {
+      "inspection_date": "Ko'rik sanasi",
+      "responsible_name": "Mas'ul",
+      "note": "Izoh"
+    },
+    "onlyMissing": "Faqat to'ldirilmaganlar ({{count}})",
+    "left": "qoldi: {{count}}",
+    "absent": "uyda yo'q",
+    "otherText": "Aniq nima ekanini ko'rsating",
+    "hint": "Ma'lumotnomadan: {{value}} — qabul qilish",
+    "unknown": {
+      "mark": "ma'lumot yo'q",
+      "marked": "Ma'lumot yo'q: {{reason}}",
+      "clear": "olib tashlash",
+      "reason": "Nega ma'lumot yo'q"
+    },
+    "rows": {
+      "add": "Qator qo'shish",
+      "save": "Qatorlarni saqlash",
+      "remove": "Qatorni o'chirish"
+    },
+    "shared": {
+      "plot": "Yer uchastkasi quyidagi uy pasportida hisobga olingan:",
+      "greenery": "Ko'kalamzorlashtirish quyidagi uy pasportida hisobga olingan:",
+      "playgrounds": "Maydonchalar quyidagi uy pasportida hisobga olingan:",
+      "own": "shu uyda",
+      "linked": "Qiymat asosiy uy pasportidan olinadi"
+    },
+    "historyEmpty": "Hozircha o'zgarishlar yo'q",
+    "revisionsEmpty": "Imzolangan tahrirlar yo'q",
+    "events": {
+      "values": "O'zgartirish",
+      "status": "Holat"
+    },
+    "issues": {
+      "sum_100": "Ulushlar yig'indisi 100 % bo'lishi kerak",
+      "sum_total": "Qismlar yig'indisi «jami»ga teng emas",
+      "pipe_condition_sum": "Qoniqarli + qoniqarsiz uzunlikka teng bo'lishi kerak",
+      "other_text_required": "Aniq nima ekanini ko'rsating"
+    },
+    "errors": {
+      "generic": "Saqlab bo'lmadi",
+      "not_found": "Pasport topilmadi",
+      "stale": "Bandni boshqa xodim o'zgartirgan — joriy qiymat ko'rsatildi",
+      "signed": "Pasport imzolangan, tahrirlash yopiq",
+      "building_inactive": "Uy ishdan chiqarilgan, tahrirlash yopiq",
+      "incomplete": "To'ldirilmagan bandlar yoki solishtirish xatolari bor",
+      "not_filled": "Faqat to'ldirilgan pasportni imzolash mumkin",
+      "sign_forbidden": "Imzolash huquqi yo'q",
+      "reason_required": "Sabab kerak",
+      "shared_readonly": "Band asosiy uy pasportida tahrirlanadi",
+      "shared_referenced": "Bu uyga boshqa pasportlar havola qilgan",
+      "shared_chain": "Tanlangan uyning o'zi boshqasiga havola qiladi",
+      "shared_self": "Shu uyning o'ziga havola qilib bo'lmaydi",
+      "shared_primary_not_found": "Uy topilmadi",
+      "not_a_number": "Son kerak",
+      "not_an_integer": "Butun son kerak",
+      "negative": "Son manfiy bo'lishi mumkin emas",
+      "percent_range": "Foiz — 0 dan 100 gacha",
+      "year_range": "Yil ruxsat etilgan oraliqdan tashqarida",
+      "too_large": "Son juda katta",
+      "too_long": "Matn juda uzun",
+      "too_many_rows": "Qatorlar juda ko'p",
+      "unknown_option": "Bunday variant yo'q",
+      "bad_date": "Sana noto'g'ri"
+    }
+  },
   "nav": {
+    "passports": "Uy pasportlari",
     "cleaning": "Tozalash",
     "roles": "Rollar va huquqlar",
     "analytics": "Analitika",

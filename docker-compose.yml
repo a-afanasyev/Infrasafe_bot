@@ -615,6 +615,7 @@ services:
         VITE_ELEVATORS_ENABLED: "${VITE_ELEVATORS_ENABLED:-}"
         # DARK-гейт модуля «Уборка»: пусто = OFF, включать вместе с CLEANING_ENABLED.
         VITE_CLEANING_ENABLED: "${VITE_CLEANING_ENABLED:-}"
+        VITE_PASSPORT_ENABLED: "${VITE_PASSPORT_ENABLED:-}"
         # DARK-гейт раздела «Отключения»: пусто = OFF, прод ставит true вместе с NEWS_WATCH_ENABLED.
         VITE_NEWS_WATCH_ENABLED: "${VITE_NEWS_WATCH_ENABLED:-}"
         # DARK-гейт раздела «Контроль платежей»: пусто = OFF. Включать только там,

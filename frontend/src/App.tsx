@@ -84,6 +84,10 @@ const CleaningControlPage = lazy(() => import('./pages/cleaning/CleaningControlP
 const CleaningTaskPage = lazy(() => import('./pages/cleaning/CleaningTaskPage'))
 const ResidentCleaningPage = lazy(() => import('./pages/ResidentCleaningPage'))
 const CLEANING_ENABLED = import.meta.env.VITE_CLEANING_ENABLED === 'true'
+// Паспорт дома (форма №3824). DARK за VITE_PASSPORT_ENABLED (backend PASSPORT_ENABLED → 404).
+const PassportListPage = lazy(() => import('./pages/passport/PassportListPage'))
+const PassportHousePage = lazy(() => import('./pages/passport/PassportHousePage'))
+const PASSPORT_ENABLED = import.meta.env.VITE_PASSPORT_ENABLED === 'true'
 
 // Мониторинг отключений (очередь новостей + настройки). DARK за
 // VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
@@ -111,7 +115,10 @@ export function ProtectedRoute({ children, action }: ProtectedRouteProps) {
   }
   if (action && !hasAction(user?.actions, action)) {
     // Диспетчер без дашборда: его рабочее место — страница приёма заявок.
-    return <Navigate to={action !== 'callcenter.use' && isDispatcherOnly(user?.actions) ? '/dispatch' : '/home'} replace />
+    if (action !== 'callcenter.use' && isDispatcherOnly(user?.actions)) return <Navigate to="/dispatch" replace />
+    // Инспектор: дашборда нет, но паспорта домов он читает — его раздел там.
+    const toPassports = PASSPORT_ENABLED && action !== 'passport.read' && hasAction(user?.actions, 'passport.read')
+    return <Navigate to={toPassports ? '/dashboard/passports' : '/home'} replace />
   }
   return <>{children}</>
 }
@@ -249,6 +256,13 @@ export default function App() {
                   <Route path="staff" element={<PageErrorBoundary><CleaningStaffPage /></PageErrorBoundary>} />
                   <Route path="control" element={<PageErrorBoundary><CleaningControlPage /></PageErrorBoundary>} />
                   <Route path="tasks/:id" element={<PageErrorBoundary><CleaningTaskPage /></PageErrorBoundary>} />
+                </Route>
+              )}
+              {/* Паспорта домов: отдельный group — инспектор читает без dashboard.use. */}
+              {PASSPORT_ENABLED && (
+                <Route path="/dashboard/passports" element={<ProtectedRoute action="passport.read"><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><PassportListPage /></PageErrorBoundary>} />
+                  <Route path=":id" element={<PageErrorBoundary><PassportHousePage /></PageErrorBoundary>} />
                 </Route>
               )}
               {ELEVATORS_ENABLED && (

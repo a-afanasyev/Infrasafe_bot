@@ -14,6 +14,11 @@ export function isCleaningEnabled(): boolean {
   return import.meta.env.VITE_CLEANING_ENABLED === 'true'
 }
 
+/** Модуль «Паспорт дома» (согласованно с backend PASSPORT_ENABLED). */
+export function isPassportEnabled(): boolean {
+  return import.meta.env.VITE_PASSPORT_ENABLED === 'true'
+}
+
 /** Витрина «до/после» (согласованно с backend WORK_REPORTS_ENABLED). */
 export function isWorkReportsEnabled(): boolean {
   return import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
