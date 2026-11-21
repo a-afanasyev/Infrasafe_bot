@@ -167,13 +167,16 @@ describe('Паспорта домов', () => {
   it('загрузка фото повторяется с тем же ключом операции', async () => {
     const keys: string[] = []
     server.use(http.post('*/api/v2/passports/buildings/5/photos', async ({ request }) => {
-      keys.push(String((await request.formData()).get('op_key')))
+      // Ключ берём из сырого тела: разбор multipart в undici зависит от версии Node
+      // и на файле из jsdom падает.
+      keys.push(/name="op_key"\r\n\r\n([^\r]+)/.exec(await request.text())?.[1] ?? '')
       return keys.length === 1
         ? HttpResponse.json({ detail: { code: 'media_unavailable', keys: [] } }, { status: 503 })
         : HttpResponse.json({ id: 1 })
     }))
     await uploadPassportPhoto(5, 's1', new File(['x'], 'a.png', { type: 'image/png' }), 0)
     expect(keys).toHaveLength(2)
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
     expect(keys[0]).toBe(keys[1])
   })
 
