@@ -1,13 +1,13 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-# Верхняя граница int4: id за её пределом доходил до Postgres и давал 500.
-DB_ID_MAX = 2_147_483_647
 from typing import Optional, List, Literal
 from datetime import datetime
 
 from uk_management_bot.utils.constants import (
     MAX_DESCRIPTION_LENGTH, URGENCY_VALUES, validate_canonical_urgency,
 )
+
+# Верхняя граница int4: id за её пределом доходил до Postgres и давал 500.
+DB_ID_MAX = 2_147_483_647
 
 VALID_STATUSES = [
     "Новая", "В работе", "Закуп", "Уточнение",
