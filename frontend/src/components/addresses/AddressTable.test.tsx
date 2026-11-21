@@ -172,6 +172,19 @@ it('дворы и здания сохраняют подпись статуса'
   expect(within(rows).getAllByText('Активен').length).toBeGreaterThan(0)
 })
 
+it('дворы: метка «Подземный паркинг» только у двора с паркингом', () => {
+  const base = { address: null, description: null, is_active: true, created_at: null, buildings_count: 1 }
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AddressTable level="yards" yards={[
+        { ...base, id: 1, name: 'Двор с паркингом', has_underground_parking: true },
+        { ...base, id: 2, name: 'Двор без паркинга' },
+      ]} />
+    </QueryClientProvider>,
+  )
+  expect(screen.getAllByText('Подземный паркинг')).toHaveLength(1)
+})
+
 // -- Сортировка -----------------------------------------------------------
 
 /** Порядок номеров квартир — то, что реально видит пользователь. */

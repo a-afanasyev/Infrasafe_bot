@@ -74,6 +74,16 @@ describe('YardGrid', () => {
     expect(onYardClick).toHaveBeenCalledTimes(1)
   })
 
+  it('метка «Подземный паркинг» — только у двора с паркингом', () => {
+    render(
+      <YardGrid
+        yards={[yard({ name: 'Двор А', has_underground_parking: true }), yard({ id: 2, name: 'Двор Б' })]}
+        onYardClick={noop} onEdit={noop} onToggleActive={noop} onDelete={noop} onPurge={noop}
+      />,
+    )
+    expect(screen.getAllByText('Подземный паркинг')).toHaveLength(1)
+  })
+
   it('renders empty state when no yards', () => {
     const { container } = render(
       <YardGrid yards={[]} onYardClick={noop} onEdit={noop} onToggleActive={noop} onDelete={noop} onPurge={noop} />,
