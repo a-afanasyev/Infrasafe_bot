@@ -83,6 +83,7 @@ class ShiftScheduler:
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
             'outage_reminders': {'success': 0, 'failed': 0, 'last_run': None},
             'cleaning_tick': {'success': 0, 'failed': 0, 'last_run': None},
+            'passport_cleanup': {'success': 0, 'failed': 0, 'last_run': None},
             'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
             'monthly_report': {'success': 0, 'failed': 0, 'last_run': None},
         }
@@ -373,6 +374,17 @@ class ShiftScheduler:
                 IntervalTrigger(minutes=CLEANING_TICK_MINUTES),
                 id='cleaning_tick',
                 name='Уборка — задания дня, закрытие дня, чистка',
+                max_instances=1,
+                coalesce=True
+            )
+
+        # 17. Паспорт дома: чистка загрузок фото, не доведённых до конца за сутки.
+        if settings.PASSPORT_ENABLED:
+            self.scheduler.add_job(
+                self._passport_cleanup,
+                IntervalTrigger(hours=1),
+                id='passport_cleanup',
+                name='Паспорт дома — чистка брошенных загрузок фото',
                 max_instances=1,
                 coalesce=True
             )
@@ -1057,6 +1069,24 @@ class ShiftScheduler:
         except Exception:
             self.task_stats[task_name]['failed'] += 1
             logger.exception("Ошибка тика уборки")
+        self.task_stats[task_name]['last_run'] = utc_now()
+
+    async def _passport_cleanup(self):
+        """Паспорт дома: закрыть брошенные загрузки фото и убрать их файлы."""
+        from uk_management_bot.database.session import AsyncSessionLocal
+        if AsyncSessionLocal is None:  # SQLite dev-режим — async-движка нет
+            return
+        from uk_management_bot.services.building_passport import photos
+
+        task_name = 'passport_cleanup'
+        try:
+            closed = await photos.cleanup(AsyncSessionLocal)
+            if closed:
+                logger.info("Паспорт дома: закрыто брошенных загрузок: %s", closed)
+            self.task_stats[task_name]['success'] += 1
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            logger.exception("Ошибка чистки загрузок паспорта")
         self.task_stats[task_name]['last_run'] = utc_now()
 
     async def _outage_reminders_tick(self):

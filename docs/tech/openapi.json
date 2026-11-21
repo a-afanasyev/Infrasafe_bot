@@ -1478,6 +1478,34 @@
         "title": "Body_upload_photo_api_v2_cleaning_tasks__task_id__photos_post",
         "type": "object"
       },
+      "Body_upload_photo_api_v2_passports_buildings__building_id__photos_post": {
+        "properties": {
+          "op_key": {
+            "description": "UUID операции; повтор с ним же не создаёт второй файл",
+            "title": "Op Key",
+            "type": "string"
+          },
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG/PNG, до 8 МиБ",
+            "title": "Photo",
+            "type": "string"
+          },
+          "section": {
+            "description": "Ключ раздела схемы",
+            "maxLength": 40,
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo",
+          "section",
+          "op_key"
+        ],
+        "title": "Body_upload_photo_api_v2_passports_buildings__building_id__photos_post",
+        "type": "object"
+      },
       "BotCfg": {
         "properties": {
           "label": {
@@ -24188,6 +24216,70 @@
         ]
       }
     },
+    "/api/v2/passports/buildings/{building_id}/export.xlsx": {
+      "get": {
+        "description": "Рабочее состояние паспорта, с пометкой «черновик».",
+        "operationId": "export_working_api_v2_passports_buildings__building_id__export_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Working",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
     "/api/v2/passports/buildings/{building_id}/history": {
       "get": {
         "operationId": "get_history_api_v2_passports_buildings__building_id__history_get",
@@ -24237,6 +24329,192 @@
           }
         ],
         "summary": "Get History",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos": {
+      "post": {
+        "description": "Фото раздела. 409 ``in_progress`` и 503 ``media_unavailable`` — повторить с тем же\nключом; 409 ``key_reused`` / ``photo_limit`` / ``signed``; 413/415/422 — файл, ключ, раздел.",
+        "operationId": "upload_photo_api_v2_passports_buildings__building_id__photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_photo_api_v2_passports_buildings__building_id__photos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Photo Api V2 Passports Buildings  Building Id  Photos Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Photo",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos/{photo_id}": {
+      "delete": {
+        "description": "Убрать фото из рабочего набора. Файл, вошедший в подписанную редакцию, остаётся в медиа.",
+        "operationId": "delete_photo_api_v2_passports_buildings__building_id__photos__photo_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Photo",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/buildings/{building_id}/photos/{photo_id}/file": {
+      "get": {
+        "operationId": "photo_file_api_v2_passports_buildings__building_id__photos__photo_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Photo File",
         "tags": [
           "passports"
         ]
@@ -24419,6 +24697,81 @@
         ]
       }
     },
+    "/api/v2/passports/buildings/{building_id}/revisions/{revision_no}/export.xlsx": {
+      "get": {
+        "description": "Подписанная редакция — по её собственной копии схемы и эталона формы.",
+        "operationId": "export_revision_api_v2_passports_buildings__building_id__revisions__revision_no__export_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_no",
+            "required": true,
+            "schema": {
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Revision No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Revision",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
     "/api/v2/passports/buildings/{building_id}/sign": {
       "post": {
         "operationId": "sign_passport_api_v2_passports_buildings__building_id__sign_post",
@@ -24536,6 +24889,59 @@
           }
         ],
         "summary": "Set Status",
+        "tags": [
+          "passports"
+        ]
+      }
+    },
+    "/api/v2/passports/export.xlsx": {
+      "get": {
+        "description": "Сводная по последним подписанным редакциям: дом в строке, пункт в столбце.",
+        "operationId": "export_summary_api_v2_passports_export_xlsx_get",
+        "parameters": [
+          {
+            "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык листов «Дополнение УК» и «Разбивка»; форма всегда дословно",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Summary",
         "tags": [
           "passports"
         ]

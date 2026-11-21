@@ -3,13 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import EmptyState from '../../components/shared/EmptyState'
-import { usePassports } from '../../features/passport/api'
+import { Button } from '@/components/ui/button'
+import { downloadCsv } from '../../utils/download'
+import { useApiLang } from '../../utils/apiLang'
+import { PASSPORTS_BASE, usePassports } from '../../features/passport/api'
 
 /** Паспорта домов: дом плиткой — статус и сколько пунктов отвечено. */
 export default function PassportListPage() {
   const { t } = useTranslation()
   usePageTitle(t('housePassport.title'))
   const list = usePassports()
+  const lang = useApiLang()
 
   if (list.isLoading) return <LoadingSpinner />
   if (list.isError || !list.data?.length) {
@@ -17,7 +21,12 @@ export default function PassportListPage() {
   }
   return (
     <div className="p-6 flex flex-col gap-5">
-      <h1 className="text-xl font-semibold text-text-primary">{t('housePassport.title')}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-text-primary">{t('housePassport.title')}</h1>
+        <Button size="sm" variant="outline" onClick={() => downloadCsv(`${PASSPORTS_BASE}/export.xlsx`, { lang }, 'passports-summary.xlsx')}>
+          {t('housePassport.downloadSummary')}
+        </Button>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {list.data.map((p) => {
           const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0

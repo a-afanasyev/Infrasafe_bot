@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { normalizeApiLang, type ApiLang } from '../../utils/apiLang'
+import PassportPhotos from './PassportPhotos'
 import type {
-  PassportField, PassportGroup, PassportItem, PassportPatch, PassportRow, PassportSchema, PassportValue, PassportValues,
+  PassportField, PassportGroup, PassportItem, PassportPatch, PassportPhoto, PassportRow, PassportSchema, PassportValue, PassportValues,
 } from './api'
 
 /**
@@ -22,6 +23,7 @@ export interface PassportData {
   issues?: { key: string; code: string }[]
   missing?: string[]
   hints?: Record<string, string | number | null>
+  photos?: PassportPhoto[]
 }
 
 interface Props {
@@ -32,6 +34,8 @@ interface Props {
   /** Дома для выбора «учтено в паспорте дома…». */
   buildings?: { building_id: number; address: string }[]
   onlyMissing?: boolean
+  /** Дом — для фото разделов; без него фото не показываются. */
+  buildingId?: number
 }
 
 /** Пункт паспорта → ключ подсказки из справочника. */
@@ -179,7 +183,7 @@ function UnknownMark({ reason, canEdit, onSet }: { reason?: string; canEdit: boo
   )
 }
 
-export default function PassportForm({ schema, data, onPatch, buildings = [], onlyMissing = false }: Props) {
+export default function PassportForm({ schema, data, onPatch, buildings = [], onlyMissing = false, buildingId }: Props) {
   const { t, i18n } = useTranslation()
   const lang = normalizeApiLang(i18n.language)
   const { values, unknown, shared_from: shared } = data
@@ -287,7 +291,13 @@ export default function PassportForm({ schema, data, onPatch, buildings = [], on
               <span>{section.no !== null ? `${section.no}. ` : ''}{section[lang]}</span>
               {left > 0 && <span className="rounded-full bg-bg-surface px-2 py-0.5 text-[11px] text-text-muted">{t('housePassport.left', { count: left })}</span>}
             </summary>
-            <div className="flex flex-col gap-4 border-t border-border-default px-4 py-4">{shown.map(renderItem)}</div>
+            <div className="flex flex-col gap-4 border-t border-border-default px-4 py-4">
+              {shown.map(renderItem)}
+              {buildingId !== undefined && (
+                <PassportPhotos buildingId={buildingId} section={section.key} canEdit={canEdit}
+                                photos={(data.photos ?? []).filter((photo) => photo.section === section.key)} />
+              )}
+            </div>
           </details>
         )
       })}

@@ -166,7 +166,90 @@ async def test_disabled_module_answers_404_everywhere(client, seeded, monkeypatc
              ("POST", "/buildings/1/sign", {"expected_version": 0}),
              ("POST", "/buildings/1/reopen", {"expected_version": 0, "reason": "x"}),
              ("GET", "/buildings/1/history", None), ("GET", "/buildings/1/revisions", None),
-             ("GET", "/buildings/1/revisions/1", None)]
+             ("GET", "/buildings/1/revisions/1", None), ("POST", "/buildings/1/photos", None),
+             ("DELETE", "/buildings/1/photos/1", None), ("GET", "/buildings/1/photos/1/file", None),
+             ("GET", "/export.xlsx", None), ("GET", "/buildings/1/export.xlsx", None),
+             ("GET", "/buildings/1/revisions/1/export.xlsx", None)]
     for method, path, body in calls:
         resp = await client.request(method, BASE + path, json=body)
         assert resp.status_code == 404, (method, path)
+
+
+@pytest.mark.asyncio
+async def test_photos_upload_replay_file_and_delete(client, seeded, act_as, db_session_factory, monkeypatch):
+    import uuid
+
+    from uk_management_bot.api.passports import router
+    from uk_management_bot.services.building_passport.photos import Media
+
+    files: dict[int, str] = {}
+
+    async def find(ref):
+        return sorted(i for i, r in files.items() if r == ref)
+
+    async def upload(ref, user_id, data, mime, section):
+        files[len(files) + 1] = ref
+        return len(files)
+
+    async def delete(media_id):
+        files.pop(media_id, None)
+
+    monkeypatch.setattr(router, "AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr(router, "_MEDIA", Media(find=find, upload=upload, delete=delete))
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    form = {"section": "playgrounds", "op_key": str(uuid.uuid4())}
+
+    def send():
+        return client.post(f"{BASE}/buildings/1/photos", data=form, files={"photo": ("a.png", png, "image/png")})
+
+    act_as(_as('["inspector"]'))
+    assert (await send()).status_code == 403, "инспектор не загружает"
+
+    act_as(_as('["executor", "engineer"]'))
+    first = await send()
+    assert first.status_code == 200, first.text
+    again = await send()
+    assert again.json()["id"] == first.json()["id"] and again.json()["replay"] and len(files) == 1
+    photo_id = first.json()["id"]
+    assert [p["id"] for p in (await client.get(f"{BASE}/buildings/1")).json()["photos"]] == [photo_id]
+
+    bad = await client.post(f"{BASE}/buildings/1/photos", data={**form, "op_key": "nope"},
+                            files={"photo": ("a.png", png, "image/png")})
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "invalid_idempotency_key"
+    assert (await client.get(f"{BASE}/buildings/2/photos/{photo_id}/file")).status_code == 404, "чужой дом"
+    assert (await client.delete(f"{BASE}/buildings/2/photos/{photo_id}")).status_code in (404, 409)
+
+    assert (await client.delete(f"{BASE}/buildings/1/photos/{photo_id}")).status_code == 204
+    assert files == {} and (await client.get(f"{BASE}/buildings/1")).json()["photos"] == []
+    assert (await client.delete(f"{BASE}/buildings/1/photos/{photo_id}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_exports_draft_revision_and_summary(client, seeded, act_as):
+    import io
+
+    from openpyxl import load_workbook
+
+    def first_cell(resp) -> str:
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"].startswith("application/vnd.openxmlformats")
+        return load_workbook(io.BytesIO(resp.content)).worksheets[0]["A1"].value
+
+    act_as(_as('["manager"]'))
+    assert first_cell(await client.get(f"{BASE}/buildings/1/export.xlsx")).startswith("ЧЕРНОВИК")
+    assert (await client.get(f"{BASE}/buildings/1/revisions/1/export.xlsx")).status_code == 404
+
+    version = await _complete(client)
+    filled = await client.post(f"{BASE}/buildings/1/status", json={"expected_version": version, "status": "filled"})
+    signed = await client.post(f"{BASE}/buildings/1/sign", json={"expected_version": filled.json()["version"]})
+    assert signed.status_code == 200, signed.text
+
+    act_as(_as('["inspector"]'))
+    assert first_cell(await client.get(f"{BASE}/buildings/1/revisions/1/export.xlsx?lang=uz")) == "1-tahrir"
+    summary = await client.get(f"{BASE}/export.xlsx")
+    sheet = load_workbook(io.BytesIO(summary.content)).worksheets[0]
+    assert summary.status_code == 200 and [sheet["A2"].value, sheet["B2"].value] == ["д. 12", "№1"]
+    assert (await client.get(f"{BASE}/export.xlsx?lang=xx")).status_code == 422
+
+    act_as(_as('["executor"]'))
+    assert (await client.get(f"{BASE}/buildings/1/export.xlsx")).status_code == 403

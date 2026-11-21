@@ -368,6 +368,8 @@
     "menuItem": "F.I.Sh. bosh harflar bilan"
   },
   "housePassport": {
+    "download": "Shakl faylini yuklab olish",
+    "downloadSummary": "Imzolanganlar bo'yicha yig'ma",
     "title": "Uy pasportlari",
     "empty": "Uylar yo'q",
     "progress": "To'ldirilgan",
@@ -416,10 +418,18 @@
       "own": "shu uyda",
       "linked": "Qiymat asosiy uy pasportidan olinadi"
     },
+    "photos": {
+      "add": "Rasm qo'shish",
+      "uploading": "Yuklanmoqda…",
+      "remove": "Rasmni olib tashlash",
+      "open": "Rasmni ochish"
+    },
     "historyEmpty": "Hozircha o'zgarishlar yo'q",
     "revisionsEmpty": "Imzolangan tahrirlar yo'q",
     "events": {
       "values": "O'zgartirish",
+      "photo_added": "Rasm qo'shildi",
+      "photo_removed": "Rasm olib tashlandi",
       "status": "Holat"
     },
     "issues": {
@@ -430,6 +440,14 @@
     },
     "errors": {
       "generic": "Saqlab bo'lmadi",
+      "key_reused": "Yuklashni takrorlang",
+      "in_progress": "Yuklash hali davom etmoqda — keyinroq takrorlang",
+      "media_unavailable": "Rasm ombori ishlamayapti — keyinroq takrorlang",
+      "photo_limit": "Bo'limda allaqachon 20 ta rasm bor",
+      "photo_too_large": "Fayl juda katta",
+      "unsupported_photo_type": "JPEG yoki PNG kerak",
+      "photo_empty": "Fayl bo'sh",
+      "bad_photo": "Fayl qabul qilinmadi",
       "not_found": "Pasport topilmadi",
       "stale": "Bandni boshqa xodim o'zgartirgan — joriy qiymat ko'rsatildi",
       "signed": "Pasport imzolangan, tahrirlash yopiq",

@@ -146,6 +146,7 @@ async def view(db: AsyncSession, building_id: int) -> dict:
         "legacy": {k: v for k, v in values.items()
                    if k not in known and not k.endswith(validation.TEXT_SUFFIX)},
         "hints": await prefill.hints(db, building),
+        "photos": await _photos(db, passport.id) if passport else [],
         "updated_at": passport.updated_at.isoformat() if passport and passport.updated_at else None,
         "updated_by_name": passport.updated_by_name if passport else None,
     }
@@ -476,3 +477,16 @@ async def history(db: AsyncSession, building_id: int) -> list[dict]:
         .order_by(BuildingPassportEvent.id.desc()).limit(HISTORY_LIMIT))).scalars()
     return [{"id": e.id, "kind": e.kind, "changes": e.changes, "reason": e.reason, "actor_name": e.actor_name,
              "created_at": e.created_at.isoformat() if e.created_at else None} for e in rows]
+
+
+async def latest_revisions(db: AsyncSession) -> list[dict]:
+    """Последняя подписанная редакция каждого активного дома — для сводной выгрузки."""
+    rows = (await db.execute(
+        select(BuildingPassportRevision, Building.address)
+        .join(BuildingPassport, BuildingPassport.id == BuildingPassportRevision.passport_id)
+        .join(Building, Building.id == BuildingPassport.building_id)
+        .where(Building.is_active.is_(True),
+               BuildingPassportRevision.revision_no == BuildingPassport.revision_no)
+        .order_by(Building.id))).all()
+    return [{"address": address, "revision_no": r.revision_no, "values": r.values, "shared_from": r.shared_from}
+            for r, address in rows]

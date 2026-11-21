@@ -10,10 +10,12 @@ import AccessTabBar from '../../components/access/AccessTabBar'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import EmptyState from '../../components/shared/EmptyState'
 import { fmtInstant } from '../../utils/elevatorsFormat'
+import { downloadCsv } from '../../utils/download'
+import { useApiLang } from '../../utils/apiLang'
 import PassportForm from '../../features/passport/PassportForm'
 import {
   usePassport, usePassportHistory, usePassportRevision, usePassportRevisions, usePassports, usePassportSchema,
-  usePassportWrite, type PassportMeta, type PassportStatus,
+  usePassportWrite, PASSPORTS_BASE, type PassportMeta, type PassportStatus,
 } from '../../features/passport/api'
 
 /**
@@ -44,6 +46,9 @@ export default function PassportHousePage() {
   const revisions = usePassportRevisions(id, tab === 'revisions')
   const revision = usePassportRevision(id, revisionNo)
   const write = usePassportWrite(id)
+  const lang = useApiLang()
+  // Файл формы; у редакции — по её собственной копии схемы и эталона.
+  const download = (path: string, name: string) => downloadCsv(`${PASSPORTS_BASE}/buildings/${id}${path}/export.xlsx`, { lang }, `${name}.xlsx`)
   usePageTitle(passport.data ? `${t('housePassport.title')} · ${passport.data.address}` : t('housePassport.title'))
 
   if (passport.isLoading || schema.isLoading) return <LoadingSpinner />
@@ -81,6 +86,7 @@ export default function PassportHousePage() {
         {canSign && p.editable && p.status === 'filled' && (
           <Button size="sm" disabled={write.isPending} onClick={() => write.mutate({ op: 'sign' })}>{t('housePassport.sign')}</Button>
         )}
+        <Button size="sm" variant="outline" onClick={() => download('', `passport-${id}-draft`)}>{t('housePassport.download')}</Button>
         {canSign && signed && (
           <>
             <Input className="max-w-xs" aria-label={t('housePassport.reopenReason')} placeholder={t('housePassport.reopenReason')}
@@ -114,7 +120,7 @@ export default function PassportHousePage() {
             <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
             {t('housePassport.onlyMissing', { count: p.missing.length })}
           </label>
-          <PassportForm schema={schema.data} data={p} onlyMissing={onlyMissing}
+          <PassportForm schema={schema.data} data={p} onlyMissing={onlyMissing} buildingId={id}
                         buildings={(buildings.data ?? []).filter((b) => b.building_id !== id)}
                         onPatch={editable ? (body) => write.mutate({ op: 'patch', body }) : undefined} />
         </>
@@ -145,7 +151,13 @@ export default function PassportHousePage() {
               </Button>
             ))}
           </div>
-          {revision.data && <PassportForm schema={revision.data.schema} data={revision.data} />}
+          {revision.data && (
+            <Button size="sm" variant="outline" className="self-start"
+                    onClick={() => download(`/revisions/${revision.data.revision_no}`, `passport-${id}-rev${revision.data.revision_no}`)}>
+              {t('housePassport.download')}
+            </Button>
+          )}
+          {revision.data && <PassportForm schema={revision.data.schema} data={revision.data} buildingId={id} />}
         </div>
       ))}
     </div>

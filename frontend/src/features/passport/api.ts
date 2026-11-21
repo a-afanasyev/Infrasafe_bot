@@ -80,7 +80,15 @@ export interface PassportMeta {
   note: string | null
 }
 
+export interface PassportPhoto {
+  id: number
+  section: string
+  uploaded_by_name: string | null
+  uploaded_at: string | null
+}
+
 export interface PassportView extends PassportSummary {
+  photos: PassportPhoto[]
   values: PassportValues
   unknown: Record<string, string>
   absent: string[]
@@ -124,6 +132,7 @@ export interface PassportRevision extends PassportRevisionHead {
   absent: string[]
   shared_from: Record<string, number>
   meta: PassportMeta & { address?: string }
+  photos: PassportPhoto[]
 }
 
 export const passportKeys = {
@@ -209,4 +218,30 @@ export function usePassportWrite(id: number) {
       qc.invalidateQueries({ queryKey: passportKeys.detail(id) })
     },
   })
+}
+
+const RETRY_CODES = new Set(['in_progress', 'media_unavailable'])
+const ATTEMPTS = 3
+
+/**
+ * Одна загрузка фото: ключ операции один на все попытки, поэтому повтор после
+ * обрыва сети, 503 или «ещё выполняется» не создаёт второго файла.
+ */
+export async function uploadPassportPhoto(buildingId: number, section: string, file: File, pauseMs = 2000): Promise<void> {
+  const opKey = crypto.randomUUID()
+  for (let attempt = 1; ; attempt += 1) {
+    const form = new FormData()
+    form.append('photo', file)
+    form.append('section', section)
+    form.append('op_key', opKey)
+    try {
+      await apiClient.post(`${PASSPORTS_BASE}/buildings/${buildingId}/photos`, form)
+      return
+    } catch (error) {
+      const code = passportErrorCode(error)
+      const retryable = code === null ? axios.isAxiosError(error) && !error.response : RETRY_CODES.has(code)
+      if (!retryable || attempt >= ATTEMPTS) throw error
+      await new Promise((resolve) => setTimeout(resolve, pauseMs))
+    }
+  }
 }

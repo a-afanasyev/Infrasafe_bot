@@ -7,7 +7,7 @@ import { server } from '../../test/msw/server'
 import { useAuthStore } from '../../stores/authStore'
 import { actionsFor } from '../../test/authz'
 import { ProtectedRoute } from '../../App'
-import type { PassportSchema, PassportView } from '../../features/passport/api'
+import { uploadPassportPhoto, type PassportSchema, type PassportView } from '../../features/passport/api'
 import PassportListPage from './PassportListPage'
 import PassportHousePage from './PassportHousePage'
 
@@ -37,7 +37,7 @@ const VIEW: PassportView = {
   progress: { done: 1, total: 4 }, editable: true,
   values: { floors: 9 }, unknown: {}, absent: [], shared_from: {},
   meta: { inspection_date: null, responsible_name: null, note: null },
-  issues: [], missing: ['attic', 'windows'], hints: {}, updated_at: null, updated_by_name: null,
+  issues: [], missing: ['attic', 'windows'], hints: {}, photos: [], updated_at: null, updated_by_name: null,
 }
 
 function mock(view: PassportView = VIEW) {
@@ -151,6 +151,40 @@ describe('Паспорта домов', () => {
     expect(screen.queryByLabelText('Статус')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Подписать' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'нет данных' })).not.toBeInTheDocument()
+  })
+
+  it('загрузка фото повторяется с тем же ключом операции', async () => {
+    const keys: string[] = []
+    server.use(http.post('*/api/v2/passports/buildings/5/photos', async ({ request }) => {
+      keys.push(String((await request.formData()).get('op_key')))
+      return keys.length === 1
+        ? HttpResponse.json({ detail: { code: 'media_unavailable', keys: [] } }, { status: 503 })
+        : HttpResponse.json({ id: 1 })
+    }))
+    await uploadPassportPhoto(5, 's1', new File(['x'], 'a.png', { type: 'image/png' }), 0)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  it('фото раздела: превью, удаление — только у редактора', async () => {
+    const photo = { id: 9, section: 's1', uploaded_by_name: 'Инженер', uploaded_at: null }
+    const deleted: string[] = []
+    mock({ ...VIEW, photos: [photo] })
+    server.use(
+      http.get('*/api/v2/passports/buildings/5/photos/9/file', () => new HttpResponse(new Blob(['x'], { type: 'image/jpeg' }))),
+      http.delete('*/api/v2/passports/buildings/5/photos/:id', ({ params }) => { deleted.push(String(params.id)); return new HttpResponse(null, { status: 204 }) }),
+    )
+    const user = userEvent.setup()
+    const first = renderHouse()
+    expect(await screen.findByAltText('Инженер')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Убрать фото' }))
+    await waitFor(() => expect(deleted).toEqual(['9']))
+    first.unmount()
+    as('inspector')
+    renderHouse()
+    expect(await screen.findByAltText('Инженер')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Убрать фото' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Добавить фото' })).not.toBeInTheDocument()
   })
 
   it('инспектор без дашборда попадает в паспорта, а не на /home', async () => {

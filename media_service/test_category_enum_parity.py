@@ -21,6 +21,8 @@ UK_PROXY_CATEGORIES = (
     FileCategories.BEFORE_PHOTO,
     # Фото уборки: тоже /media/upload-report, но только с сервера UK.
     FileCategories.CLEANING_PHOTO,
+    # Фото разделов паспорта дома: /media/upload-report, только с сервера UK.
+    FileCategories.PASSPORT_PHOTO,
 )
 
 

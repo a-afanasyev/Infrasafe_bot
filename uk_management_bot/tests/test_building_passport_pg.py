@@ -19,6 +19,7 @@ from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.building_passport import (
     BuildingPassport,
     BuildingPassportEvent,
+    BuildingPassportPhoto,
     BuildingPassportRevision,
 )
 from uk_management_bot.database.models.yard import Yard
@@ -41,6 +42,7 @@ async def _wipe(factory) -> None:
     async with factory() as db:
         ids = select(BuildingPassport.id).where(BuildingPassport.building_id == BUILDING)
         await db.execute(delete(BuildingPassportEvent).where(BuildingPassportEvent.passport_id.in_(ids)))
+        await db.execute(delete(BuildingPassportPhoto).where(BuildingPassportPhoto.passport_id.in_(ids)))
         await db.execute(delete(BuildingPassportRevision).where(BuildingPassportRevision.passport_id.in_(ids)))
         await db.execute(delete(BuildingPassport).where(BuildingPassport.building_id == BUILDING))
         await db.execute(delete(Building).where(Building.id == BUILDING))
@@ -157,3 +159,47 @@ async def test_edit_racing_with_signing_never_lands_in_the_revision(factory):
             assert (await svc.revision(db, BUILDING, 1))["values"].get("floors") != 77
         else:
             assert revisions == []
+
+
+@pytest.mark.asyncio
+async def test_two_uploads_with_one_key_leave_one_photo_and_one_file(factory):
+    import uuid
+
+    from uk_management_bot.services.building_passport import photos
+
+    files: dict[int, str] = {}
+
+    async def find(ref):
+        return sorted(i for i, r in files.items() if r == ref)
+
+    async def upload(ref, user_id, data, mime, section):
+        await asyncio.sleep(0.05)
+        files[len(files) + 1] = ref
+        return len(files)
+
+    async def drop(media_id):
+        files.pop(media_id, None)
+
+    key, png = str(uuid.uuid4()), b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+    async def one() -> str:
+        try:
+            await photos.upload(factory, BUILDING, ENGINEER, section="playgrounds", op_key=key, photo_bytes=png,
+                                media=photos.Media(find=find, upload=upload, delete=drop))
+        except PassportError as exc:
+            return exc.code
+        return "ok"
+
+    # Паспорта ещё нет: гонка первых фото — проходит одна, остальные получают повторяемый отказ.
+    first = await asyncio.gather(one(), one(), one())
+    assert "ok" in first and set(first) <= {"ok", "in_progress"}, first
+    assert len(files) == 1
+
+    key = str(uuid.uuid4())  # паспорт есть: тот же ключ тремя запросами
+    results = await asyncio.gather(one(), one(), one())
+    assert sorted(results) == ["in_progress", "in_progress", "ok"], results
+    assert len(files) == 2
+    async with factory() as db:
+        rows = (await db.execute(select(BuildingPassportPhoto.state).join(BuildingPassport).where(
+            BuildingPassport.building_id == BUILDING))).scalars().all()
+    assert rows == ["done", "done"]

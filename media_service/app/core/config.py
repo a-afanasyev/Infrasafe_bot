@@ -193,6 +193,9 @@ class FileCategories:
     # Фото уборки подъезда — канал отчётов; в белый список UK-прокси НЕ входит:
     # грузит только сервер UK своим протоколом (services/cleaning/uploads.py)
     CLEANING_PHOTO = "cleaning_photo"
+    # Фото разделов паспорта дома — канал отчётов; грузит только сервер UK
+    # (services/building_passport/photos.py), «номер заявки» — `bp` + 18 hex ключа операции
+    PASSPORT_PHOTO = "passport_photo"
 
     # Обратная связь (жалобы/пожелания)
     FEEDBACK_PHOTO = "feedback_photo"
@@ -221,6 +224,7 @@ class FileCategories:
         COMPLETION_VIDEO: TelegramChannels.REPORTS,
         BEFORE_PHOTO: TelegramChannels.REPORTS,
         CLEANING_PHOTO: TelegramChannels.REPORTS,
+        PASSPORT_PHOTO: TelegramChannels.REPORTS,
         FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
         ACCESS_PLATE: TelegramChannels.ACCESS,
         ACCESS_OVERVIEW: TelegramChannels.ACCESS,
