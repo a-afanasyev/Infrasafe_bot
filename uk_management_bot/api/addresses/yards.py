@@ -46,6 +46,7 @@ async def create_yard(
         description=body.description,
         gps_latitude=body.gps_latitude,
         gps_longitude=body.gps_longitude,
+        has_underground_parking=body.has_underground_parking,
         created_by=user.id,
     )
     return YardOut(**yard_dict(yard), buildings_count=0)

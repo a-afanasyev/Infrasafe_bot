@@ -4072,6 +4072,8 @@
         "description": "Структурный контракт жителя (план «Обходчик», пилот — один шаг).\n\nКлиент передаёт уровень + id записи; адрес/FK/source считает сервер через\nresolve_request_address. Legacy-поля (apartment_id/address/source в body)\nисключены — под пилот без переходного окна. Лифт — см. _ElevatorFieldsMixin.",
         "properties": {
           "address_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
             "title": "Address Id",
             "type": "integer"
           },
@@ -4079,7 +4081,8 @@
             "enum": [
               "yard",
               "building",
-              "apartment"
+              "apartment",
+              "parking"
             ],
             "title": "Address Type",
             "type": "string"
@@ -11939,6 +11942,14 @@
             "title": "Buildings",
             "type": "array"
           },
+          "parkings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RequestAddressYard"
+            },
+            "title": "Parkings",
+            "type": "array"
+          },
           "yards": {
             "items": {
               "$ref": "#/components/schemas/RequestAddressYard"
@@ -16030,6 +16041,11 @@
             ],
             "title": "Gps Longitude"
           },
+          "has_underground_parking": {
+            "default": false,
+            "title": "Has Underground Parking",
+            "type": "boolean"
+          },
           "name": {
             "maxLength": 200,
             "minLength": 3,
@@ -16095,6 +16111,11 @@
             ],
             "title": "Gps Longitude"
           },
+          "has_underground_parking": {
+            "default": false,
+            "title": "Has Underground Parking",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -16154,6 +16175,17 @@
               }
             ],
             "title": "Gps Longitude"
+          },
+          "has_underground_parking": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Underground Parking"
           },
           "is_active": {
             "anyOf": [

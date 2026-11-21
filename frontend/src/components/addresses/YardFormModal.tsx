@@ -20,6 +20,7 @@ export default function YardFormModal({ yard, onClose }: Props) {
   const [description, setDescription] = useState(yard?.description ?? '')
   const [gpsLat, setGpsLat] = useState<string>(yard?.gps_latitude != null ? String(yard.gps_latitude) : '')
   const [gpsLon, setGpsLon] = useState<string>(yard?.gps_longitude != null ? String(yard.gps_longitude) : '')
+  const [hasParking, setHasParking] = useState(yard?.has_underground_parking ?? false)
 
   const createYard = useCreateYard()
   const updateYard = useUpdateYard()
@@ -36,12 +37,12 @@ export default function YardFormModal({ yard, onClose }: Props) {
 
     if (yard) {
       updateYard.mutate(
-        { id: yard.id, name: name.trim(), description: description.trim() || null, gps_latitude: lat, gps_longitude: lon },
+        { id: yard.id, name: name.trim(), description: description.trim() || null, gps_latitude: lat, gps_longitude: lon, has_underground_parking: hasParking },
         { onSuccess: onClose },
       )
     } else {
       createYard.mutate(
-        { name: name.trim(), description: description.trim() || null, gps_latitude: lat, gps_longitude: lon, is_active: true },
+        { name: name.trim(), description: description.trim() || null, gps_latitude: lat, gps_longitude: lon, is_active: true, has_underground_parking: hasParking },
         { onSuccess: onClose },
       )
     }
@@ -98,6 +99,19 @@ export default function YardFormModal({ yard, onClose }: Props) {
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-2 text-[13px]">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={hasParking}
+              onChange={e => setHasParking(e.target.checked)}
+            />
+            <span>
+              {t('addressForms.undergroundParking')}
+              <span className="block text-xs text-text-muted">{t('addressForms.undergroundParkingHint')}</span>
+            </span>
+          </label>
 
           {mutation.error && (
             <div className="text-red text-[13px] font-[family-name:var(--font-display)]">

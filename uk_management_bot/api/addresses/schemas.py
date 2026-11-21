@@ -11,6 +11,7 @@ class YardOut(BaseModel):
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
     is_active: bool
+    has_underground_parking: bool = False
     created_at: Optional[datetime] = None
     buildings_count: int = 0
     model_config = {"from_attributes": True}
@@ -19,6 +20,7 @@ class YardOut(BaseModel):
 class YardCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=200)
     description: Optional[str] = None
+    has_underground_parking: bool = False
     gps_latitude: Optional[float] = Field(None, ge=-90, le=90)
     gps_longitude: Optional[float] = Field(None, ge=-180, le=180)
 
@@ -26,6 +28,7 @@ class YardCreate(BaseModel):
 class YardUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=200)
     description: Optional[str] = None
+    has_underground_parking: Optional[bool] = None
     gps_latitude: Optional[float] = Field(None, ge=-90, le=90)
     gps_longitude: Optional[float] = Field(None, ge=-180, le=180)
     is_active: Optional[bool] = None

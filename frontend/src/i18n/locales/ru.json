@@ -2420,6 +2420,8 @@
     "descriptionLabel": "Описание",
     "gpsLat": "GPS Широта",
     "gpsLon": "GPS Долгота",
+    "undergroundParking": "Есть подземный паркинг",
+    "undergroundParkingHint": "Жители двора смогут выбрать паркинг адресом заявки",
     "addressLabel": "Адрес *",
     "entrancesLabel": "Подъезды",
     "floorsLabel": "Этажи",
@@ -3211,6 +3213,7 @@
     "create": {
       "selectCategory": "Выберите категорию",
       "selectAddress": "Выберите адрес",
+      "undergroundParking": "подземный паркинг",
       "describe": "Опишите проблему",
       "descriptionPlaceholder": "Подробно опишите проблему...",
       "next": "Далее",

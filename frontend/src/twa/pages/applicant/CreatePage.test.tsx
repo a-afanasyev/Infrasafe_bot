@@ -318,3 +318,34 @@ describe('CreatePage — Р18: лифт в работах', () => {
     expect(alert).toHaveTextContent(/ул\. Ленина 1, подъезд 2, лифт 1/)
   })
 })
+
+describe('CreatePage — подземный паркинг двора', () => {
+  it('паркинг предлагается, когда сервер его отдал; POST несёт address_type parking и id двора', async () => {
+    mockApi()
+    mockGet.mockImplementation((url: string) => (url.includes('request-addresses')
+      ? Promise.resolve({ data: { ...ADDRESSES, parkings: [{ id: 1, label: 'Двор 1, подземный паркинг' }] } })
+      : Promise.resolve({ data: {} })))
+    const user = userEvent.setup()
+    render(<CreatePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Сантехника' }))
+    await user.click(await screen.findByRole('button', { name: /Двор 1, подземный паркинг/ }))
+    await user.type(screen.getByRole('textbox'), 'Течёт труба')
+    await user.click(screen.getByRole('button', { name: 'Далее' }))
+    await user.click(screen.getByRole('button', { name: 'Далее' })) // фото — пропускаем
+    await user.click(screen.getByRole('button', { name: 'Обычная' }))
+    await user.click(screen.getByRole('button', { name: 'Отправить заявку' }))
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    expect(mockPost.mock.calls[0][1]).toMatchObject({ address_type: 'parking', address_id: 1 })
+  })
+
+  it('без паркинга в ответе сервера пункта нет', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    render(<CreatePage />)
+    await user.click(screen.getByRole('button', { name: 'Сантехника' }))
+    await screen.findByRole('button', { name: /Двор 1/ })
+    expect(screen.queryByRole('button', { name: /паркинг/ })).not.toBeInTheDocument()
+  })
+})

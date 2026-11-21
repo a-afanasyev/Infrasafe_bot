@@ -192,6 +192,8 @@ class RequestAddressesOut(BaseModel):
     yards: list[RequestAddressYard]
     buildings: list[RequestAddressBuilding]
     apartments: list[RequestAddressApartment]
+    # Подземные паркинги дворов жителя: id — это id двора, уровень адреса — "parking".
+    parkings: list[RequestAddressYard] = []
 
 
 @router.get("/request-addresses", response_model=RequestAddressesOut)

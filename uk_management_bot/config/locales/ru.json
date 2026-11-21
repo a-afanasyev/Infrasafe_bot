@@ -1704,6 +1704,7 @@
   "address": {
     "apartment_short": "кв.",
     "building_short": "д.",
+    "underground_parking": "подземный паркинг",
     "keyboards": {
       "manage_yards": "🏘 Управление дворами",
       "manage_buildings": "🏢 Управление зданиями",

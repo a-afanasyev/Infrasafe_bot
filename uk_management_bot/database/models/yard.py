@@ -1,7 +1,7 @@
 """
 Модель двора (Yard) для справочника адресов
 """
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, false
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -30,6 +30,9 @@ class Yard(Base):
 
     # Статус
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+
+    # Во дворе есть подземный паркинг: жители двора могут выбрать его адресом заявки.
+    has_underground_parking = Column(Boolean, default=False, nullable=False, server_default=false())
 
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -274,6 +274,7 @@ erDiagram
 - UNIQUE: `uix_building_apartment` (`building_id`,`apartment_number`), `uix_user_apartment` (`user_id`,`apartment_id`), `uix_user_yard` (`user_id`,`yard_id`).
 - `user_apartments.status` — модерация связи житель↔квартира (`pending/approved/rejected`); подтверждает менеджер (`user_apartment.py:83`).
 - `user_yards` даёт доступ к доп. дворам (менеджеры нескольких дворов, жители с квартирами в разных дворах).
+- `yards.has_underground_parking` (миграция 037) — галочка «Есть подземный паркинг» в форме двора. Если стоит, жители двора видят в выборе адреса заявки пункт «<двор>, подземный паркинг» (уровень `parking`, id = id двора; `services/request_address.py`). Заявка хранится как заявка уровня двора (`address_type = 'yard'`), паркинг отличает только текст `requests.address`.
 
 ---
 

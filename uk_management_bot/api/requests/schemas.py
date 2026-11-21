@@ -1,4 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# Верхняя граница int4: id за её пределом доходил до Postgres и давал 500.
+DB_ID_MAX = 2_147_483_647
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -245,8 +248,8 @@ class CreateRequestBody(_ElevatorFieldsMixin):
     category: str
     urgency: str
     description: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
-    address_type: Literal["yard", "building", "apartment"]
-    address_id: int
+    address_type: Literal["yard", "building", "apartment", "parking"]
+    address_id: int = Field(ge=1, le=DB_ID_MAX)
 
     @field_validator("category")
     @classmethod

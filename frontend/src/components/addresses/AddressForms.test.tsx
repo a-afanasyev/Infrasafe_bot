@@ -56,7 +56,7 @@ describe('YardFormModal', () => {
     await user.click(create)
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
-    expect(calls[0].body).toEqual({ name: 'Двор 3', description: null, gps_latitude: 41.3, gps_longitude: null, is_active: true })
+    expect(calls[0].body).toEqual({ name: 'Двор 3', description: null, gps_latitude: 41.3, gps_longitude: null, is_active: true, has_underground_parking: false })
   })
 
   it('невалидная широта (> 90) — запроса нет; ошибка API показывается', async () => {
@@ -82,9 +82,18 @@ describe('YardFormModal', () => {
     expect(screen.getByText('Редактировать двор')).toBeInTheDocument()
     expect((byLabel('GPS Долгота') as HTMLInputElement).value).toBe('69.9')
     await user.clear(byLabel('Описание'))
+    // Галочка «Есть подземный паркинг»: снята у двора без паркинга, уходит в PATCH.
+    const parking = screen.getByRole('checkbox', { name: /Есть подземный паркинг/ })
+    expect(parking).not.toBeChecked()
+    await user.click(parking)
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(calls).toHaveLength(1))
-    expect(calls[0]).toEqual({ url: '/uk/api/v2/addresses/yards/1', body: { name: 'Двор 1', description: null, gps_latitude: 41.1, gps_longitude: 69.9 } })
+    expect(calls[0]).toEqual({ url: '/uk/api/v2/addresses/yards/1', body: { name: 'Двор 1', description: null, gps_latitude: 41.1, gps_longitude: 69.9, has_underground_parking: true } })
+  })
+
+  it('правка: у двора с паркингом галочка стоит', () => {
+    render(<YardFormModal yard={{ ...YARDS[0], has_underground_parking: true }} onClose={() => {}} />)
+    expect(screen.getByRole('checkbox', { name: /Есть подземный паркинг/ })).toBeChecked()
   })
 })
 
