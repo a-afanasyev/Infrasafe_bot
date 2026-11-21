@@ -132,6 +132,8 @@ async def _accept(db: AsyncSession, building_id: int, actor: Actor, *, key: str,
         if (photo.passport_id, photo.section, photo.upload_sha256) != (passport.id, section, sha):
             raise PassportError("key_reused", 409)
         if photo.state == "done":
+            if photo.removed_at is not None:  # фото уже убрали: ключ отработал, нужен новый
+                raise PassportError("key_reused", 409)
             return _out(photo, replay=True)
         if photo.state == "pending" and photo.claimed_at is not None and as_utc(photo.claimed_at) > now - LEASE:
             raise PassportError("in_progress", 409)
@@ -267,8 +269,17 @@ async def _photo(db: AsyncSession, building_id: int, photo_id: int) -> BuildingP
     return photo
 
 
+async def _in_revision(db: AsyncSession, photo: BuildingPassportPhoto) -> bool:
+    revisions = (await db.execute(select(BuildingPassportRevision.photos).where(
+        BuildingPassportRevision.passport_id == photo.passport_id))).scalars()
+    return any(item.get("id") == photo.id for photos in revisions for item in photos or ())
+
+
 async def media_id_of(db: AsyncSession, building_id: int, photo_id: int) -> int:
-    return (await _photo(db, building_id, photo_id)).media_id
+    photo = await _photo(db, building_id, photo_id)
+    if photo.removed_at is not None and not await _in_revision(db, photo):
+        raise PassportError("not_found", 404)  # убрано и ни в одной редакции не числится
+    return photo.media_id
 
 
 async def remove(db: AsyncSession, building_id: int, photo_id: int, actor: Actor) -> Optional[int]:
@@ -286,10 +297,7 @@ async def remove(db: AsyncSession, building_id: int, photo_id: int, actor: Actor
     passport.version += 1
     svc._log(db, passport, actor, "photo_removed", {"section": photo.section, "photo_id": photo.id})
     await db.flush()
-    revisions = (await db.execute(select(BuildingPassportRevision.photos).where(
-        BuildingPassportRevision.passport_id == passport.id))).scalars()
-    in_revision = any(item.get("id") == photo.id for photos in revisions for item in photos or ())
-    return None if in_revision else photo.media_id
+    return None if await _in_revision(db, photo) else photo.media_id
 
 
 # ── чистка брошенных загрузок ───────────────────────────────────────────────
@@ -301,18 +309,30 @@ async def cleanup(session_factory, *, media: Media = Media(), now: Optional[date
     async with session_factory() as db:
         stale = (await db.execute(select(BuildingPassportPhoto.id, BuildingPassportPhoto.media_ref).where(
             BuildingPassportPhoto.state == "pending",
-            BuildingPassportPhoto.claimed_at < now - ABANDON_AFTER))).all()
+            BuildingPassportPhoto.claimed_at < now - ABANDON_AFTER,
+            BuildingPassportPhoto.created_at < now - ABANDON_AFTER))).all()
     closed = 0
     for photo_id, ref in stale:
+        token = str(uuid.uuid4())
+        mine = (BuildingPassportPhoto.id == photo_id, BuildingPassportPhoto.state == "pending")
+        async with session_factory() as db:
+            # Сначала аренда: повтор загрузки в это время получит in_progress и не
+            # подберёт файл, который чистка сейчас удалит.
+            taken = await db.execute(update(BuildingPassportPhoto).where(
+                *mine, BuildingPassportPhoto.claimed_at < now - ABANDON_AFTER
+            ).values(claim_token=token, claimed_at=utc_now()))
+            await db.commit()
+        if taken.rowcount == 0:
+            continue
+        state = "abandoned"
         try:
             for media_id in await media.find(ref):
                 await media.delete(media_id)
         except MediaUnavailable:
-            continue
+            state = "pending"  # аренду снимаем, строка ждёт следующего прохода
         async with session_factory() as db:
-            done = await db.execute(update(BuildingPassportPhoto).where(
-                BuildingPassportPhoto.id == photo_id, BuildingPassportPhoto.state == "pending",
-                BuildingPassportPhoto.claimed_at < now - ABANDON_AFTER).values(state="abandoned"))
+            await db.execute(update(BuildingPassportPhoto).where(
+                *mine, BuildingPassportPhoto.claim_token == token).values(state=state, claimed_at=_EPOCH))
             await db.commit()
-            closed += done.rowcount
+        closed += state == "abandoned"
     return closed

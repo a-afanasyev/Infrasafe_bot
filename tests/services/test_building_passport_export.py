@@ -91,6 +91,13 @@ def test_windows_of_one_type_sum_and_list_their_sizes():
     assert _value(book, "2.17", 1) == "3 дона; бўйи 2 м, эни 1 м; 6 м2"
 
 
+def test_fire_doors_print_in_the_steel_row():
+    """Решение владельца 2026-11-21: противопожарные двери — строка «Пўлат»."""
+    book = _book({"doors": [{"type": "fire", "count": 2, "width": 1, "height": 2},
+                            {"type": "metal", "count": 1, "width": 1, "height": 2}]})
+    assert _value(book, "2.20", 2) == "3 дона; бўйи 2 м, эни 1 м; 6 м2"
+
+
 def test_flats_over_seven_rooms_print_in_the_open_row():
     book = _book({"apt_more": [{"rooms": 8, "count": 2, "area": 310.5}, {"rooms": 9, "count": 1, "area": 200}]})
     assert _value(book, "2.13", 8) == "8 хона, 2 дона, 310.5 м2; 9 хона, 1 дона, 200 м2"
@@ -110,7 +117,7 @@ def test_off_form_window_type_stays_out_of_2_17_but_counts_in_2_19_with_a_note()
 
 
 def test_off_form_fields_go_to_the_supplement_sheet_only():
-    off_form = next(f for f in schema.iter_fields() if f.form_no is None and f.type in ("int", "decimal"))
+    off_form = next(f for f in schema.iter_fields() if f.form_no is None and f.type in ("int", "decimal") and f.show_if is None)
     book = _book({off_form.key: 7})
     extra = [r for r in book["Дополнение УК"].iter_rows(values_only=True) if r[0] == off_form.ru]
     assert len(extra) == 1 and str(extra[0][1]).startswith("7")
@@ -145,3 +152,46 @@ def test_summary_puts_a_shared_object_only_in_the_primary_house_row():
     assert (first[0], first[plot], first[floors]) == ("д. 1", 500, 9)
     assert (second[plot], second[floors]) == (None, 5), "участок учтён один раз — у основного дома"
     assert sheet.max_row == 3, "строки итогов нет: проценты не складываются"
+
+
+def test_hidden_items_never_reach_the_file():
+    """Зависимый пункт остался в данных после смены родителя — в форму он не печатается."""
+    pipe = {"run": "horizontal", "material": "steel", "diameter": 32, "length": 10, "ok_length": 10, "bad_length": 0}
+    shown = _book({"heating_type": "central", "heating_pipes": [pipe]})
+    hidden = _book({"heating_type": "none", "heating_pipes": [pipe]})
+    assert _value(shown, "6.4", 2) == "10" and _value(hidden, "6.4", 2) == ""
+    assert not any(r[0] == "горизонтальные" for r in hidden["Разбивка"].iter_rows(values_only=True))
+
+
+def test_roof_insulation_thickness_prints_in_the_row_of_the_chosen_material():
+    book = _book({"roof_insulation": "claydite", "roof_insulation_thickness": 120})
+    assert [_value(book, "5.7", n) for n in (1, 2, 3)] == ["", "120", ""]
+    assert _value(_book({"roof_insulation": "claydite"}), "5.7", 2) == "керамзит (мм)", "без толщины — отметка варианта"
+
+
+def test_other_without_a_row_in_the_form_goes_to_the_supplement():
+    book = _book({"attic_type": "closed", "attic_insulation": "other", "attic_insulation_text": "пеностекло"})
+    assert [_value(book, "5.10", n) for n in (1, 2)] == ["", ""], "строки «другое» в 5.10 нет"
+    extra = [" ".join(str(c) for c in r if c) for r in book["Дополнение УК"].iter_rows(values_only=True)]
+    assert any("пеностекло" in line for line in extra)
+
+
+def test_named_catalogue_variant_prints_its_name_in_the_other_row():
+    named = next(o for o in validation._fields()["wall_type"].options if o.other and o.key != "other")
+    assert _value(_book({"wall_type": named.key}), "3.3", 5) == named.uz
+    assert _value(_book({"wall_type": named.key, "wall_type_text": "уточнение"}), "3.3", 5) == "уточнение"
+    assert not [i for i in validation.issues({"wall_type": named.key}) if i.key == "wall_type"], "расшифровка не обязательна"
+    assert [i.code for i in validation.issues({"wall_type": "other"})] == ["other_text_required"]
+
+
+def test_group_without_data_prints_a_dash_not_the_absent_mark():
+    unknown = _book({}, unknown={"doors": "замеров нет"})
+    assert _value(unknown, "2.20", 1) == "—" and _value(unknown, "2.20", 3) == ""
+    assert _value(_book({}, absent=["doors"]), "2.20", 3) == "✓"
+
+
+def test_metal_plastic_windows_with_a_grille_print_as_plastic():
+    """Решение владельца 2026-11-21."""
+    book = _book({"windows": [{"type": "metal_plastic_grille", "count": 2, "width": 1, "height": 1},
+                              {"type": "plastic", "count": 1, "width": 1, "height": 1}]})
+    assert _value(book, "2.17", 3) == "3 дона; бўйи 1 м, эни 1 м; 3 м2"

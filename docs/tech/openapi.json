@@ -10051,6 +10051,7 @@
             "additionalProperties": {
               "anyOf": [
                 {
+                  "maxLength": 2000,
                   "type": "string"
                 },
                 {
@@ -10066,6 +10067,8 @@
             "additionalProperties": {
               "anyOf": [
                 {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
                   "type": "integer"
                 },
                 {
@@ -10081,6 +10084,7 @@
             "additionalProperties": {
               "anyOf": [
                 {
+                  "maxLength": 300,
                   "type": "string"
                 },
                 {

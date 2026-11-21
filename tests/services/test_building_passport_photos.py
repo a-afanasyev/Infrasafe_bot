@@ -199,6 +199,40 @@ async def test_removed_photo_keeps_its_file_while_a_revision_refers_to_it(factor
         assert await photos.media_id_of(db, 1, kept["id"]) == kept["media_id"]  # редакция его показывает
 
 
+async def test_removed_photo_is_gone_for_readers_and_its_key_is_spent(factory, media):
+    key = _key()
+    photo = await _up(factory, media, key=key)
+    async with factory() as db:
+        await photos.remove(db, 1, photo["id"], ENGINEER)
+        await db.commit()
+        assert (await _refused(photos.media_id_of(db, 1, photo["id"]))).http_status == 404
+    assert (await _refused(_up(factory, media, key=key))).code == "key_reused", "повтор не выдаёт убранное за добавленное"
+
+
+async def test_cleanup_holds_the_lease_so_a_retry_cannot_adopt_a_file_being_deleted(factory, media, monkeypatch):
+    key = _key()
+
+    async def boom(*a, **kw):
+        raise RuntimeError("db down")
+
+    real = photos._finalize
+    monkeypatch.setattr(photos, "_finalize", boom)
+    with pytest.raises(RuntimeError):
+        await _up(factory, media, key=key)
+    monkeypatch.setattr(photos, "_finalize", real)
+    seen = []
+
+    async def find_then_retry(ref):
+        found = await media.find(ref)
+        if not seen:  # повтор загрузки приходит посреди чистки
+            seen.append((await _refused(_up(factory, media, key=key))).code)
+        return found
+
+    api = Media(find=find_then_retry, upload=media.upload, delete=media.delete)
+    assert await photos.cleanup(factory, media=api, now=utc_now() + photos.ABANDON_AFTER + timedelta(minutes=1)) == 1
+    assert seen == ["in_progress"] and media.files == {}
+
+
 async def test_photo_of_another_building_is_not_found(factory, media):
     photo = await _up(factory, media)
     async with factory() as db:

@@ -65,7 +65,7 @@ PLAYGROUNDS = Section(
         _pg("child_lighting", "choice", "Детская площадка: освещение", "Bolalar maydonchasi yoritilishi",
             options=_YES_NO),
         _pg("child_install_year", "int", "Детское оборудование: год установки",
-            "Bolalar jihozlari o'rnatilgan yil", unit=YEAR),
+            "Bolalar jihozlari o'rnatilgan yili", unit=YEAR),
         _count("sport_count", "Спортивные площадки: количество", "Sport maydonchalari soni"),
         _pg("sport_area", "decimal", "Спортивные площадки: общая площадь",
             "Sport maydonchalarining umumiy maydoni", unit=M2),

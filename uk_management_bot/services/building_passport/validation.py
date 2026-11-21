@@ -106,7 +106,7 @@ def _scalar(key: str, raw: Any, item: Field) -> Any:
         return _text(key, raw)
     if raw == "":
         return None
-    if raw not in {o.key for o in item.options}:
+    if not isinstance(raw, str) or raw not in {o.key for o in item.options}:
         raise BadValue(key, "unknown_option")
     return raw
 
@@ -241,7 +241,7 @@ def issues(values: Mapping[str, Any]) -> list[Issue]:
         if key not in shown or not item.options:
             continue
         chosen = next((o for o in item.options if o.key == values.get(key)), None)
-        if chosen is not None and chosen.other and not values.get(key + TEXT_SUFFIX):
+        if chosen is not None and chosen.other and chosen.key == "other" and not values.get(key + TEXT_SUFFIX):
             out.append(Issue(key, "other_text_required"))
     return out
 
@@ -259,7 +259,7 @@ def missing(values: Mapping[str, Any], *, unknown: Mapping[str, str], absent: se
     out = []
     for key in _required(values):
         if key in _groups():
-            if not values.get(key) and key not in absent:
+            if not values.get(key) and key not in absent and key not in unknown:
                 out.append(key)
         elif values.get(key) is None and key not in unknown:
             out.append(key)

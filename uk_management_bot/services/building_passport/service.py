@@ -17,7 +17,7 @@ Commit — у вызывающего.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Any, Mapping, Optional
 
@@ -168,8 +168,9 @@ async def overview(db: AsyncSession) -> list[dict]:
 async def _is_referenced(db: AsyncSession, building_id: int, unit: str) -> bool:
     # ponytail: полный перебор паспортов — их столько же, сколько домов (десятки);
     # при тысячах домов вынести ссылки в отдельную таблицу с индексом.
-    rows = (await db.execute(select(BuildingPassport.shared_from).where(
-        BuildingPassport.building_id != building_id))).scalars()
+    rows = (await db.execute(select(BuildingPassport.shared_from).join(
+        Building, Building.id == BuildingPassport.building_id).where(
+        BuildingPassport.building_id != building_id, Building.is_active.is_(True)))).scalars()
     return any((shared or {}).get(unit) == building_id for shared in rows)
 
 
@@ -187,9 +188,14 @@ def _meta_value(key: str, raw: Any) -> Any:
         return None
     if key == "inspection_date":
         try:
-            return date.fromisoformat(raw) if isinstance(raw, str) else raw
+            day = date.fromisoformat(raw) if isinstance(raw, str) else raw
         except ValueError:
-            raise PassportError("bad_date", 422, (f"meta.{key}",)) from None
+            day = None
+        # Осмотр не раньше 2000 года и не в будущем (сутки запаса на часовой пояс):
+        # иначе опечатка в годе молча уходит в подписанный паспорт.
+        if not isinstance(day, date) or not date(2000, 1, 1) <= day <= utc_now().date() + timedelta(days=1):
+            raise PassportError("bad_date", 422, (f"meta.{key}",))
+        return day
     limit = NOTE_MAX if key == "note" else NAME_MAX
     if not isinstance(raw, str) or len(raw.strip()) > limit:
         raise PassportError("too_long", 422, (f"meta.{key}",))
@@ -226,17 +232,31 @@ async def _apply_shared(db: AsyncSession, draft: _Draft, building_id: int, share
             primary_building = await db.get(Building, primary_id) if isinstance(primary_id, int) else None
             if primary_building is None or not primary_building.is_active:
                 raise PassportError("shared_primary_not_found", 422, (unit,))
-            primary = await load(db, primary_id)
+            # Строка основного дома блокируется: иначе два параллельных запроса
+            # (A→B и B→C) оба пройдут проверку и сложатся в цепочку.
+            # ponytail: встречные ссылки A→B и B→A одновременно дадут deadlock (Postgres
+            # снимет один запрос ошибкой); упорядочить блокировки по id, если это случится.
+            primary = await load(db, primary_id, for_update=True)
             # Цепочек нет: основной дом сам хранит значение, а мы не можем
             # сослаться, пока кто-то ссылается на нас.
-            if (primary is not None and unit in primary.shared_from) or await _is_referenced(db, building_id, unit):
+            if primary is not None and unit in primary.shared_from:
                 raise PassportError("shared_chain", 409, (unit,))
+            if await _is_referenced(db, building_id, unit):
+                raise PassportError("shared_referenced", 409, (unit,))
             draft.shared[unit] = primary_id
             for key in _unit_keys()[unit]:  # своих значений у ссылающегося дома нет
                 draft.values.pop(key, None)
                 draft.unknown.pop(key, None)
         else:
             draft.shared.pop(unit)
+            # Отвязка не должна терять данные: дом получает копию значений основного
+            # и дальше ведёт их сам.
+            primary = await load(db, old)
+            for key in _unit_keys()[unit] if primary is not None else ():
+                if primary.values.get(key) is not None:
+                    draft.values[key] = primary.values[key]
+                elif key in primary.unknown:
+                    draft.unknown[key] = primary.unknown[key]
         draft.note(f"shared.{unit}", old, primary_id, f"shared.{unit}", *_unit_keys()[unit])
 
 
@@ -265,10 +285,10 @@ async def _apply_values(db: AsyncSession, draft: _Draft, building_id: int, value
 
 
 def _apply_unknown(draft: _Draft, unknown: Mapping[str, Any]) -> None:
-    fields = {f.key: f for f in schema.iter_fields()}
+    fields = {**{f.key: f for f in schema.iter_fields()}, **{g.key: g for g in schema.iter_groups()}}
     for key, raw in unknown.items():
         item = fields.get(key)
-        if item is None or item.computed:
+        if item is None or getattr(item, "computed", False):
             raise PassportError("unknown_field", 422, (key,))
         if _unit_of().get(key) in draft.shared:
             raise PassportError("shared_readonly", 409, (key,))
@@ -281,6 +301,7 @@ def _apply_unknown(draft: _Draft, unknown: Mapping[str, Any]) -> None:
         else:
             draft.unknown[key] = new
             draft.values.pop(key, None)
+            draft.absent.discard(key)
         draft.note(f"unknown.{key}", old, new, key)
 
 
@@ -294,6 +315,7 @@ def _apply_absent(draft: _Draft, absent: Mapping[str, Any]) -> None:
         if flag:
             draft.absent.add(key)
             draft.values.pop(key, None)
+            draft.unknown.pop(key, None)
         else:
             draft.absent.discard(key)
         draft.note(f"absent.{key}", not flag, bool(flag), key)
@@ -378,7 +400,14 @@ async def patch(db: AsyncSession, building_id: int, actor: Actor, *, expected_ve
     passport.responsible_name, passport.note = draft.meta["responsible_name"], draft.meta["note"]
     _log(db, passport, actor, "values", draft.changes)
     await db.flush()
-    return await view(db, building_id)
+    out = await view(db, building_id)
+    if passport.status == "filled" and (out["missing"] or out["issues"] or passport.inspection_date is None):
+        # Статус «Заполнен» обещает полноту: правка, которая её нарушила, возвращает паспорт в сбор.
+        passport.status = "collecting"
+        _log(db, passport, actor, "status", {"status": ["filled", "collecting"]})
+        await db.flush()
+        out = await view(db, building_id)
+    return out
 
 
 # ── статусы и редакции ──────────────────────────────────────────────────────

@@ -407,6 +407,7 @@
       "reason": "Nega ma'lumot yo'q"
     },
     "rows": {
+      "unsaved": "Qatorlar saqlanmagan",
       "add": "Qator qo'shish",
       "save": "Qatorlarni saqlash",
       "remove": "Qatorni o'chirish"
@@ -439,6 +440,8 @@
       "other_text_required": "Aniq nima ekanini ko'rsating"
     },
     "errors": {
+      "no_inspection_date": "Sahifa yuqorisida ko'rik sanasini ko'rsating",
+      "stale_status": "Pasport siz ko'rayotganda o'zgardi — tekshirib, qayta urinib ko'ring",
       "generic": "Saqlab bo'lmadi",
       "key_reused": "Yuklashni takrorlang",
       "in_progress": "Yuklash hali davom etmoqda — keyinroq takrorlang",
@@ -451,7 +454,7 @@
       "not_found": "Pasport topilmadi",
       "stale": "Bandni boshqa xodim o'zgartirgan — joriy qiymat ko'rsatildi",
       "signed": "Pasport imzolangan, tahrirlash yopiq",
-      "building_inactive": "Uy ishdan chiqarilgan, tahrirlash yopiq",
+      "building_inactive": "Uy faol emas, tahrirlash yopiq",
       "incomplete": "To'ldirilmagan bandlar yoki solishtirish xatolari bor",
       "not_filled": "Faqat to'ldirilgan pasportni imzolash mumkin",
       "sign_forbidden": "Imzolash huquqi yo'q",
@@ -4443,7 +4446,7 @@
       "cleaning.read": "Tozalash: uylar rejasi, biriktirish, yuklama, nazorat",
       "cleaning.manage": "Tozalash: rejalar, biriktirishlar va sozlamalarni tahrirlash",
       "passport.read": "Uy pasporti: ko'rish, jurnal, tahrirlar",
-      "passport.edit": "Uy pasporti: to'ldirish va «To'ldirilgan» holatigacha",
+      "passport.edit": "Uy pasporti: to'ldirish va holatni «To'ldirilgan»gacha o'zgartirish",
       "passport.sign": "Uy pasporti: imzolash va ishga qaytarish",
       "callcenter.use": "Call-markaz: qo'ng'iroq bo'yicha arizalar",
       "dashboard.live": "Boshqaruv paneli hodisalarining jonli oqimi (WebSocket)",

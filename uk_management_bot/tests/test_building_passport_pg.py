@@ -28,6 +28,8 @@ from uk_management_bot.services.building_passport import validation
 from uk_management_bot.services.building_passport.service import Actor, PassportError
 
 YARD = BUILDING = 990101
+OTHERS = (990102, 990103)  # для ссылок на общий объект
+ALL = (BUILDING, *OTHERS)
 ENGINEER, MANAGER = Actor(None, "PG инженер"), Actor(None, "PG менеджер")
 
 
@@ -40,12 +42,12 @@ def _async_url() -> str:
 
 async def _wipe(factory) -> None:
     async with factory() as db:
-        ids = select(BuildingPassport.id).where(BuildingPassport.building_id == BUILDING)
+        ids = select(BuildingPassport.id).where(BuildingPassport.building_id.in_(ALL))
         await db.execute(delete(BuildingPassportEvent).where(BuildingPassportEvent.passport_id.in_(ids)))
         await db.execute(delete(BuildingPassportPhoto).where(BuildingPassportPhoto.passport_id.in_(ids)))
         await db.execute(delete(BuildingPassportRevision).where(BuildingPassportRevision.passport_id.in_(ids)))
-        await db.execute(delete(BuildingPassport).where(BuildingPassport.building_id == BUILDING))
-        await db.execute(delete(Building).where(Building.id == BUILDING))
+        await db.execute(delete(BuildingPassport).where(BuildingPassport.building_id.in_(ALL)))
+        await db.execute(delete(Building).where(Building.id.in_(ALL)))
         await db.execute(delete(Yard).where(Yard.id == YARD))
         await db.commit()
 
@@ -62,8 +64,8 @@ async def factory():
     async with maker() as db:
         db.add(Yard(id=YARD, name=f"passport-pg-{YARD}", is_active=True))
         await db.flush()
-        db.add(Building(id=BUILDING, yard_id=YARD, address="passport-pg", entrance_count=1,
-                        floor_count=9, is_active=True))
+        db.add_all([Building(id=i, yard_id=YARD, address=f"passport-pg-{i}", entrance_count=1,
+                             floor_count=9, is_active=True) for i in ALL])
         await db.commit()
     try:
         yield maker
@@ -203,3 +205,24 @@ async def test_two_uploads_with_one_key_leave_one_photo_and_one_file(factory):
         rows = (await db.execute(select(BuildingPassportPhoto.state).join(BuildingPassport).where(
             BuildingPassport.building_id == BUILDING))).scalars().all()
     assert rows == ["done", "done"]
+
+
+@pytest.mark.asyncio
+async def test_parallel_links_never_form_a_chain(factory):
+    """A→B и B→C одновременно: цепочка не складывается — проходит не больше одной ссылки."""
+    a, b, c = ALL
+
+    async def link(house: int, primary: int) -> str:
+        return await _run(factory, lambda db: svc.patch(
+            db, house, ENGINEER, expected_version=1, shared_from={"plot": primary}))
+
+    for house in ALL:  # паспорта существуют — их строки можно блокировать
+        assert await _run(factory, lambda db, h=house: svc.patch(
+            db, h, ENGINEER, expected_version=0, values={"floors": 9})) == "ok"
+    results = await asyncio.gather(link(a, b), link(b, c))
+    # Кто проиграл — зависит от порядка: «основной сам ссылается» либо «на этот дом уже ссылаются».
+    assert "ok" in results and set(results) - {"ok"} <= {"shared_chain", "shared_referenced"}, results
+    assert results.count("ok") == 1, results
+    async with factory() as db:
+        links = {h: (await svc.view(db, h))["shared_from"] for h in ALL}
+    assert sum(bool(v) for v in links.values()) == 1, links

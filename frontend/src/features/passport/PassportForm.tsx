@@ -152,6 +152,7 @@ function GroupTable({ group, rows, lang, disabled, onSave }: GroupProps) {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setDraft((prev) => [...prev, {}])}>{t('housePassport.rows.add')}</Button>
           {dirty && <Button size="sm" onClick={save}>{t('housePassport.rows.save')}</Button>}
+          {dirty && <span role="status" className="self-center text-[12px] text-orange">{t('housePassport.rows.unsaved')}</span>}
         </div>
       )}
     </div>
@@ -243,6 +244,10 @@ export default function PassportForm({ schema, data, onPatch, buildings = [], on
           {!isAbsent && (
             <GroupTable key={JSON.stringify(value)} group={item} rows={(value as PassportRow[] | null) ?? []} lang={lang}
                         disabled={disabled} onSave={(rows) => saveValue(item.key, rows)} />
+          )}
+          {!isAbsent && !(value as PassportRow[] | null)?.length && (
+            <UnknownMark reason={unknown[item.key]} canEdit={!disabled}
+                         onSet={(reason) => onPatch?.({ unknown: { [item.key]: reason } })} />
           )}
           {tail}
         </div>

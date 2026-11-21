@@ -253,3 +253,14 @@ async def test_exports_draft_revision_and_summary(client, seeded, act_as):
 
     act_as(_as('["executor"]'))
     assert (await client.get(f"{BASE}/buildings/1/export.xlsx")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_oversized_and_out_of_range_input_is_422_not_500(client, seeded, act_as):
+    act_as(_as('["manager"]'))
+    for body in ({"shared_from": {"plot": 10 ** 30}}, {"shared_from": {"plot": -1}},
+                 {"unknown": {"built_year": "x" * 301}}, {"meta": {"note": "x" * 2001}},
+                 {"values": {"heritage": []}}):
+        resp = await client.patch(f"{BASE}/buildings/1", json={"expected_version": 0, **body})
+        assert resp.status_code == 422, (body.keys(), resp.status_code)
+    assert (await client.get(f"{BASE}/buildings/1")).json()["version"] == 0

@@ -121,6 +121,17 @@ describe('Паспорта домов', () => {
     await waitFor(() => expect(patches).toEqual([{ unknown: { floors: 'нет документов' }, expected_version: 3 }]))
   })
 
+  it('группу строк можно закрыть как «нет данных»', async () => {
+    const { patches } = mock()
+    const user = userEvent.setup()
+    renderHouse()
+    await screen.findByLabelText('Количество этажей')
+    await user.click(screen.getAllByRole('button', { name: 'нет данных' }).at(-1)!)
+    await user.type(screen.getByLabelText('Почему нет данных'), 'замеров нет')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(patches).toEqual([{ unknown: { windows: 'замеров нет' }, expected_version: 3 }]))
+  })
+
   it('строки группы сохраняются кнопкой, числом', async () => {
     const { patches } = mock()
     const user = userEvent.setup()

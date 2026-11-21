@@ -217,7 +217,63 @@ async def test_shared_reference_rules(db):
     await _patch(db, 1, values={"plot_area": 500})
     await _patch(db, 2, shared_from={"plot": 1})
     assert (await _refused(_patch(db, 1, shared_from={"plot": 2}))).code == "shared_chain"
+    assert (await _refused(_patch(db, 1, shared_from={"plot": 3}))).code != "shared_chain"
     assert (await _refused(_patch(db, 1, values={"plot_area": None}))).code == "shared_referenced"
+
+
+async def test_unlinking_gives_the_house_its_own_copy_of_the_values(db):
+    """Отвязка от основного дома не оставляет пункты пустыми."""
+    await _patch(db, 1, values={"plot_area": 500}, unknown={"green_share": "не считали"})
+    await _patch(db, 2, shared_from={"plot": 1})
+    view = await _patch(db, 2, shared_from={"plot": None})
+    assert view["shared_from"] == {} and view["values"]["plot_area"] == 500.0
+    assert view["unknown"]["green_share"] == "не считали"
+    await _patch(db, 1, values={"plot_area": 520})
+    assert (await svc.view(db, 2))["values"]["plot_area"] == 500.0, "после отвязки значение своё"
+    assert (await _patch(db, 2, values={"plot_area": 480}))["values"]["plot_area"] == 480.0
+
+
+async def test_group_can_be_closed_as_no_data(db):
+    view = await _patch(db, unknown={"doors": "замеров нет"})
+    assert view["unknown"]["doors"] == "замеров нет" and "doors" not in view["missing"]
+    assert "doors" not in (await _patch(db, absent={"doors": True}))["unknown"], "«нет в доме» снимает «нет данных»"
+    view = await _patch(db, unknown={"doors": "замеров нет"})
+    assert "doors" not in view["absent"]
+    view = await _patch(db, values={"doors": [{"type": "wood", "count": 1, "width": 1, "height": 2}]})
+    assert "doors" not in view["unknown"], "строки снимают «нет данных»"
+
+
+async def test_filled_status_does_not_survive_an_edit_that_breaks_completeness(db):
+    view = await _complete(db)
+    view = await svc.set_status(db, 1, ENGINEER, status="filled", expected_version=view["version"])
+    view = await _patch(db, values={"floors": 9})
+    assert view["status"] == "filled", "полный паспорт остаётся «Заполнен»"
+    view = await _patch(db, values={"facade_ok_pct": 70, "facade_bad_pct": 20})
+    assert view["status"] == "collecting" and view["issues"], "ошибка сверки возвращает в сбор"
+
+
+async def test_deactivated_referencing_house_does_not_hold_the_primary(db, el_seed):
+    from uk_management_bot.database.models.building import Building
+
+    await _patch(db, 1, values={"plot_area": 500})
+    await _patch(db, 2, shared_from={"plot": 1})
+    assert (await _refused(_patch(db, 1, values={"plot_area": None}))).code == "shared_referenced"
+    (await db.get(Building, 2)).is_active = False
+    await db.flush()
+    assert "plot_area" not in (await _patch(db, 1, values={"plot_area": None}))["values"]
+
+
+async def test_inspection_date_must_be_sane(db):
+    for bad in ("0002-11-21", "1999-12-31", "2999-01-01", "вчера", 5):
+        error = await _refused(_patch(db, meta={"inspection_date": bad}))
+        assert (error.code, error.keys) == ("bad_date", ("meta.inspection_date",)), bad
+    assert (await _patch(db, meta={"inspection_date": "2026-11-20"}))["meta"]["inspection_date"] == "2026-11-20"
+
+
+async def test_non_text_choice_value_is_refused_not_crashed(db):
+    for bad in ([], {}, ["no"], 5):
+        error = await _refused(_patch(db, values={"heritage": bad}))
+        assert (error.code, error.http_status) == ("unknown_option", 422), bad
 
 
 async def test_signing_copies_shared_value_and_later_edits_do_not_touch_it(db):

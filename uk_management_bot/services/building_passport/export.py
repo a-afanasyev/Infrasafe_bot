@@ -39,6 +39,9 @@ DASH = "—"
 MARK = "✓"
 ABSENT_CELL = "мавжуд эмас"  # строка формы «отсутствует»
 OPENING_GROUPS = ("windows", "doors")
+#: Число печатается в строке варианта, выбранного в другом пункте: в форме 5.7
+#: толщина пишется в скобках у выбранного материала, отдельной строки нет.
+ROW_FOLLOWS = {"roof_insulation_thickness": "roof_insulation"}
 BOLD = Font(bold=True)
 ITALIC = Font(italic=True)
 
@@ -77,6 +80,23 @@ def _items(schema: Mapping) -> list[dict]:
 
 def _option(field: Mapping, key: Any) -> Optional[dict]:
     return next((o for o in field.get("options") or () if o["key"] == key), None)
+
+
+def visible_values(schema: Mapping, values: Mapping) -> dict:
+    """Значения без скрытых пунктов: зависимый пункт остаётся в данных, когда его
+    условие перестало выполняться, но в файл попадать не должен."""
+    items = {i["key"]: i for i in _items(schema)}
+
+    def shown(key: str, seen: frozenset = frozenset()) -> bool:
+        rule = items[key].get("show_if")
+        if not rule:
+            return True
+        parent, allowed = rule
+        return parent in items and parent not in seen and shown(parent, seen | {key}) and values.get(parent) in allowed
+
+    return {k: v for k, v in values.items()
+            if (k.removesuffix("_text") if k.removesuffix("_text") in items else k) not in items
+            or shown(k.removesuffix("_text") if k.removesuffix("_text") in items else k)}
 
 
 def _etalon_rows(form: Mapping) -> dict[str, dict[int, list[str]]]:
@@ -141,17 +161,24 @@ def _fold_plain(group: Mapping, rows: list[Mapping], cells: dict) -> None:
         ", ".join(f"{_num(row[key])} {unit}" for key, unit in parts if row.get(key) is not None) for row in rows)
 
 
-def _mark_absent(group: Mapping, etalon: Mapping, cells: dict) -> None:
+def _mark_absent(group: Mapping, etalon: Mapping, cells: dict, *, unknown: bool = False) -> None:
+    """Группы нет в доме — строка «мавжуд эмас»; данных нет — прочерк."""
     for no, row_nos in group["form"]:
         rows = etalon.get(no, {})
         absent_row = next((n for n, texts in rows.items() if [t.lower() for t in texts] == [ABSENT_CELL]), None)
-        if absent_row is not None:
+        if absent_row is not None and not unknown:
             cells[(no, absent_row)] = MARK
         else:
             cells[(no, (row_nos or [1])[0])] = DASH
 
 
-def _field_cell(field: Mapping, values: Mapping, unknown: Mapping, etalon: Mapping, cells: dict) -> None:
+def _other_row(rows: Mapping, claimed: list, option: Mapping) -> Optional[int]:
+    """Строка формы «другое — указать» для варианта с расшифровкой; None — такой строки нет."""
+    return next((n for n in claimed if option.get("form") and option["form"] in rows.get(n, ())), None)
+
+
+def _field_cell(field: Mapping, values: Mapping, unknown: Mapping, etalon: Mapping, cells: dict,
+                items: Mapping) -> None:
     no = field["form_no"]
     rows = etalon.get(no, {})
     claimed = field.get("form_rows") or sorted(rows)
@@ -168,7 +195,11 @@ def _field_cell(field: Mapping, values: Mapping, unknown: Mapping, etalon: Mappi
         if option is None:
             return
         if option.get("other"):
-            target, text = claimed[-1], str(values.get(f"{field['key']}_text") or "")
+            row = _other_row(rows, claimed, option)
+            if row is None:
+                return  # строки «другое» у пункта нет — вариант уходит на лист «Дополнение УК»
+            # Названный вариант каталога печатается своим названием, «другое» — расшифровкой.
+            target, text = row, str(values.get(f"{field['key']}_text") or option["uz"])
         elif option.get("form"):
             target = next((n for n in claimed if option["form"] in rows.get(n, ())), claimed[0])
             text = option["form"]
@@ -176,21 +207,31 @@ def _field_cell(field: Mapping, values: Mapping, unknown: Mapping, etalon: Mappi
             return  # вариант вне формы — на листе «Дополнение УК»
     else:
         text = _num(value)
+        leader = items.get(ROW_FOLLOWS.get(field["key"], ""))
+        if leader is not None:
+            option = _option(leader, values.get(leader["key"])) or {}
+            target = next((n for n in claimed if option.get("form") in rows.get(n, ())), claimed[0])
+            cells[(no, target)] = text  # число занимает место отметки варианта в этой строке
+            return
     cells[(no, target)] = f"{cells[(no, target)]} / {text}" if (no, target) in cells else text  # html-raw: ячейка XLSX, не Telegram
 
 
 def form_cells(schema: Mapping, form: Mapping, values: Mapping, unknown: Mapping, absent: Iterable[str]) -> dict:
     """Что печатать в колонке «Қиймати»: (пункт, строка) → текст."""
     etalon, cells, gone = _etalon_rows(form), {}, set(absent)
+    values = visible_values(schema, values)
+    items = {i["key"]: i for i in _items(schema)}
     for item in _items(schema):
         if item["kind"] == "field":
             if item.get("form_no"):
-                _field_cell(item, values, unknown, etalon, cells)
+                _field_cell(item, values, unknown, etalon, cells, items)
             continue
         rows = values.get(item["key"]) or []
-        if item["key"] in gone:
-            _mark_absent(item, etalon, cells)
-        elif not rows or not item.get("form"):
+        if not item.get("form"):
+            continue
+        if item["key"] in gone or item["key"] in unknown:
+            _mark_absent(item, etalon, cells, unknown=item["key"] not in gone)
+        elif not rows:
             continue
         elif item["key"] in OPENING_GROUPS:
             _fold_openings(item, rows, etalon, cells)
@@ -289,7 +330,7 @@ def _extra_sheet(ws: Worksheet, L: Mapping, schema: Mapping, values: Mapping, la
                             if line.get(f["key"]) is not None)))
             elif value is not None:
                 option = _option(item, value)
-                off_form = option is not None and not option.get("form") and not option.get("other")
+                off_form = option is not None and not option.get("form")
                 if not item.get("form_no") or off_form:
                     unit = f" {item['unit']}" if item.get("unit") else ""
                     lines.append((item[lang], _label(item, value, values, lang) + unit))
@@ -334,6 +375,7 @@ def render(*, schema: Mapping, form: Mapping, values: Mapping, unknown: Mapping,
     head = {"mark": L["draft"] if revision_no is None else L["revision"].format(no=revision_no),
             "organization": organization, "address": address, **{k: meta.get(k) for k in
                                                                  ("inspection_date", "responsible_name", "note")}}
+    values = visible_values(schema, values)
     count, area = off_form_openings(schema, values)
     note = L["off_form"].format(count=count, area=_num(area), sheet=L["extra"]) if count else None
     book = Workbook()
@@ -363,8 +405,9 @@ def render_summary(schema: Mapping, houses: list[Mapping], lang: str = "ru") -> 
         _text(ws, row, 1, house["address"])
         _text(ws, row, 2, house["mark"])
         linked = set(house.get("shared_from") or ())
+        shown = visible_values(schema, house["values"])
         for col, field in enumerate(fields, start=3):
-            value = house["values"].get(field["key"])
+            value = shown.get(field["key"])
             if value is None or field.get("share") in linked:
                 continue
             _text(ws, row, col, _label(field, value, house["values"], lang) if field.get("options") else value)

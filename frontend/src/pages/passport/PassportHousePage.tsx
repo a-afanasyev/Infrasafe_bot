@@ -47,6 +47,10 @@ export default function PassportHousePage() {
   const revision = usePassportRevision(id, revisionNo)
   const write = usePassportWrite(id)
   const lang = useApiLang()
+  const saveMeta = (key: keyof PassportMeta, raw: string) => {
+    const next = raw.trim() || null
+    if (next !== (passport.data?.meta[key] ?? null)) write.mutate({ op: 'patch', body: { meta: { [key]: next } } })
+  }
   // Файл формы; у редакции — по её собственной копии схемы и эталона.
   const download = (path: string, name: string) => downloadCsv(`${PASSPORTS_BASE}/buildings/${id}${path}/export.xlsx`, { lang }, `${name}.xlsx`)
   usePageTitle(passport.data ? `${t('housePassport.title')} · ${passport.data.address}` : t('housePassport.title'))
@@ -56,6 +60,9 @@ export default function PassportHousePage() {
     return <div className="p-6"><EmptyState icon="🏢" title={t('housePassport.errors.not_found')} /></div>
   }
   const p = passport.data
+  // Журнал хранит ключи пунктов («unknown.built_year») — показываем названия.
+  const titles = new Map(schema.data.sections.flatMap((s) => s.items).map((item) => [item.key, item[lang]]))
+  const changed = (key: string) => titles.get(key.split('.').pop() ?? key) ?? t(`housePassport.meta.${key.split('.').pop()}`, { defaultValue: key })
   const editable = canEdit && p.editable
   const signed = p.status === 'signed'
 
@@ -109,10 +116,7 @@ export default function PassportHousePage() {
               <label key={key} className="flex flex-col gap-1 text-[12px] text-text-muted">
                 {t(`housePassport.meta.${key}`)}
                 <Input key={String(p.meta[key])} type={type} defaultValue={p.meta[key] ?? ''} disabled={!editable}
-                       onBlur={(e) => {
-                         const next = e.target.value.trim() || null
-                         if (next !== p.meta[key]) write.mutate({ op: 'patch', body: { meta: { [key]: next } } })
-                       }} />
+                       onBlur={(e) => saveMeta(key, e.target.value)} />
               </label>
             ))}
           </div>
@@ -132,7 +136,7 @@ export default function PassportHousePage() {
             <li key={e.id} className="rounded-md border border-border-default bg-bg-card px-4 py-2 text-[13px] text-text-primary">
               <span className="text-text-muted">{fmtInstant(e.created_at)} · {e.actor_name ?? '—'} · </span>
               {t(`housePassport.events.${e.kind}`, { defaultValue: e.kind })}
-              {Object.keys(e.changes).length > 0 && `: ${Object.keys(e.changes).join(', ')}`}
+              {Object.keys(e.changes).length > 0 && `: ${[...new Set(Object.keys(e.changes).map(changed))].join(', ')}`}
               {e.reason && <span className="text-text-muted"> — {e.reason}</span>}
             </li>
           ))}

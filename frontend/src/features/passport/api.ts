@@ -207,28 +207,37 @@ export function usePassportWrite(id: number) {
       return call.then((r) => r.data)
     },
     onSuccess: (data, write) => {
-      qc.setQueryData(passportKeys.detail(id), data)
+      // Ответы двух быстрых правок могут прийти не по порядку: более старое
+      // состояние не должно затирать новое.
+      qc.setQueryData<PassportView>(passportKeys.detail(id), (old) => (old && old.version > data.version ? old : data))
       qc.invalidateQueries({ queryKey: passportKeys.list })
       qc.invalidateQueries({ queryKey: passportKeys.history(id) })
       if (write.op !== 'patch') qc.invalidateQueries({ queryKey: passportKeys.revisions(id) })
     },
-    onError: (error) => {
-      const code = passportErrorCode(error)
+    onError: (error, write) => {
+      const keys: unknown = axios.isAxiosError(error) ? error.response?.data?.detail?.keys : null
+      const raw = passportErrorCode(error)
+      // Пропущенная дата осмотра не видна в списке незаполненных пунктов — называем её прямо;
+      // у подписи и статуса «устарело» значит «паспорт изменился», а не «пункт».
+      const code = raw === 'incomplete' && Array.isArray(keys) && keys.includes('meta.inspection_date') ? 'no_inspection_date'
+        : raw === 'stale' && write.op !== 'patch' ? 'stale_status' : raw
       toast.error(t(`housePassport.errors.${code ?? 'generic'}`, { defaultValue: t('housePassport.errors.generic') }))
       qc.invalidateQueries({ queryKey: passportKeys.detail(id) })
     },
   })
 }
 
-const RETRY_CODES = new Set(['in_progress', 'media_unavailable'])
-const ATTEMPTS = 3
+const LEASE_MS = 130_000 // аренда загрузки на сервере — 2 минуты
 
 /**
  * Одна загрузка фото: ключ операции один на все попытки, поэтому повтор после
- * обрыва сети, 503 или «ещё выполняется» не создаёт второго файла.
+ * обрыва сети, 503 или «ещё выполняется» не создаёт второго файла. «Ещё
+ * выполняется» ждём до конца аренды: иначе пользователь выберет файл заново
+ * (с новым ключом) и получит два фото.
  */
-export async function uploadPassportPhoto(buildingId: number, section: string, file: File, pauseMs = 2000): Promise<void> {
+export async function uploadPassportPhoto(buildingId: number, section: string, file: File, pauseMs = 5000): Promise<void> {
   const opKey = crypto.randomUUID()
+  const started = Date.now()
   for (let attempt = 1; ; attempt += 1) {
     const form = new FormData()
     form.append('photo', file)
@@ -239,8 +248,9 @@ export async function uploadPassportPhoto(buildingId: number, section: string, f
       return
     } catch (error) {
       const code = passportErrorCode(error)
-      const retryable = code === null ? axios.isAxiosError(error) && !error.response : RETRY_CODES.has(code)
-      if (!retryable || attempt >= ATTEMPTS) throw error
+      const waiting = code === 'in_progress' && Date.now() - started < LEASE_MS
+      const transient = code === 'media_unavailable' || (code === null && axios.isAxiosError(error) && !error.response)
+      if (!waiting && !(transient && attempt < 3)) throw error
       await new Promise((resolve) => setTimeout(resolve, pauseMs))
     }
   }

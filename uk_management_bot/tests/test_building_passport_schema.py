@@ -12,7 +12,7 @@ import json
 from uk_management_bot.services.building_passport import schema
 from uk_management_bot.services.building_passport.schema import Field, Group
 
-SCHEMA_SHA256 = "fd1eb5d30220c706d35b4eae6e9a8f9edd68cd0e7fa59062d087aa3b219bbc5a"
+SCHEMA_SHA256 = "6525a6a06e5101a30edb497696681b04d5ca8657f7d8e5f7e6f9d6b88cb85719"
 
 
 def _fields() -> list[Field]:
