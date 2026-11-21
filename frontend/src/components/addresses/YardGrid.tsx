@@ -89,6 +89,9 @@ export default function YardGrid({
             <span className="bg-blue/[.13] text-blue rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">
               {t('addresses.building', { count: yard.buildings_count })}
             </span>
+            {yard.has_underground_parking && (
+              <span className="bg-accent/[.13] text-accent rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)] whitespace-nowrap">{t('addresses.undergroundParking')}</span>
+            )}
             {!yard.is_active && (
               <span className="bg-text-muted/[.13] text-text-muted rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)]">{t('addresses.inactive')}</span>
             )}

@@ -237,7 +237,12 @@ function YardsTable({
             )}
             style={{ gridTemplateColumns: YARD_COLS }}
           >
-            <span className="text-xs text-text-primary font-semibold">{yard.name}</span>
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="text-xs text-text-primary font-semibold truncate">{yard.name}</span>
+              {yard.has_underground_parking && (
+                <span className="bg-accent/[.13] text-accent rounded-xl px-2 py-0.5 text-[11px] font-semibold font-[family-name:var(--font-mono)] whitespace-nowrap">{t('addresses.undergroundParking')}</span>
+              )}
+            </span>
             <span className="text-xs text-text-muted truncate">
               {yard.description ?? '—'}
             </span>
