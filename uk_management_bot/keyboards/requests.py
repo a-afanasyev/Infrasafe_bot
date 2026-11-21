@@ -6,6 +6,7 @@ from uk_management_bot.utils.constants import (
     CALLBACK_PREFIX_URGENCY,
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.address_helpers import localize_address
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 # A9-P2-10: доменный справочник переехал в utils/categories.py; ре-экспорт тех же
 # объектов (identity) для хендлеров и клавиатур этого модуля.
@@ -372,6 +373,8 @@ def build_request_address_inline_keyboard(addresses: dict, page: int = 0, langua
         items.append(("building", b["id"], f"🏢 {b['label']}"))
     for y in addresses.get("yards", []):
         items.append(("yard", y["id"], f"🏘️ {y['label']}"))
+    for p in addresses.get("parkings", []):
+        items.append(("parking", p["id"], f"🅿️ {localize_address(p['label'], language)}"))
 
     total = len(items)
     pages = max(1, (total + PAGE_SIZE_ADDR - 1) // PAGE_SIZE_ADDR)

@@ -214,6 +214,8 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
     try:
         _, atype, raw_id = callback.data.split(":", 2)
         address_id = int(raw_id)
+        if not 0 < address_id <= 2_147_483_647:  # callback шлёт клиент: вне int4 → ошибка БД
+            raise ValueError(raw_id)
     except (ValueError, AttributeError):
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
         return
@@ -232,7 +234,9 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
 
     data = await state.update_data(
         address=resolved.canonical_address,
-        address_type=resolved.address_type,
+        # Уровень — как выбран (не resolved.address_type): паркинг резолвится в
+        # заявку уровня двора, и повторный резолв при сохранении потерял бы его.
+        address_type=atype,
         address_id=address_id,
         apartment_id=resolved.apartment_id,
         building_id=resolved.building_id,

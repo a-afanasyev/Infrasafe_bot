@@ -25,7 +25,7 @@ export function isElevatorSelectionComplete(v: ElevatorSelection): boolean {
 
 /** Дом для запроса лифтов: квартира → её building_id, дом → сам id, двор → нет. */
 export function resolveBuildingId(
-  addressType: 'yard' | 'building' | 'apartment' | null,
+  addressType: 'yard' | 'building' | 'apartment' | 'parking' | null,
   addressId: number | null,
   apartments: ReadonlyArray<{ id: number; building_id?: number }>,
 ): number | null {

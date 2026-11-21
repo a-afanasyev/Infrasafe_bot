@@ -2401,6 +2401,8 @@
     "descriptionLabel": "Tavsif",
     "gpsLat": "GPS Kenglik",
     "gpsLon": "GPS Uzunlik",
+    "undergroundParking": "Yer osti avtoturargohi bor",
+    "undergroundParkingHint": "Hovli aholisi arizada manzil sifatida avtoturargohni tanlay oladi",
     "addressLabel": "Manzil *",
     "entrancesLabel": "Kirishlar",
     "floorsLabel": "Qavatlar",
@@ -3190,6 +3192,7 @@
     "create": {
       "selectCategory": "Toifani tanlang",
       "selectAddress": "Manzilni tanlang",
+      "undergroundParking": "yer osti avtoturargohi",
       "describe": "Muammoni tasvirlang",
       "descriptionPlaceholder": "Muammoni batafsil tasvirlang...",
       "next": "Keyingisi",

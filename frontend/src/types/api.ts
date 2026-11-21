@@ -272,6 +272,8 @@ export interface YardBrief {
   is_active: boolean
   created_at: string | null
   buildings_count: number
+  /** Во дворе есть подземный паркинг — жители могут выбрать его адресом заявки. */
+  has_underground_parking?: boolean
 }
 
 export interface BuildingBrief {

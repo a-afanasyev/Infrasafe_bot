@@ -115,6 +115,7 @@ async def create_yard(
     description: str | None = None,
     gps_latitude: float | None = None,
     gps_longitude: float | None = None,
+    has_underground_parking: bool = False,
 ) -> Yard:
     existing = (await db.execute(
         select(Yard.id).where(Yard.name == name)
@@ -127,6 +128,7 @@ async def create_yard(
         description=description,
         gps_latitude=gps_latitude,
         gps_longitude=gps_longitude,
+        has_underground_parking=has_underground_parking,
         created_by=created_by,
         is_active=True,
     )
@@ -163,6 +165,8 @@ async def update_yard(db: AsyncSession, yard_id: int, updates: dict) -> Yard:
             raise AddressConflict(f"Двор с названием '{updates['name']}' уже существует")
 
     for field, value in updates.items():
+        if field == "has_underground_parking" and value is None:
+            continue  # колонка NOT NULL: «не задано» = не менять
         setattr(yard, field, value)
     await db.flush()
 

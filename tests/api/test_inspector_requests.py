@@ -511,3 +511,73 @@ def test_inspector_schema_matches_resolver_allowed_levels():
 
     schema_levels = set(CreateInspectorRequestBody.model_fields["address_type"].annotation.__args__)
     assert schema_levels == set(ROLE_ALLOWED_LEVELS["inspector"]) == {"building"}
+
+
+# ─────────────── подземный паркинг двора (галочка у двора) ───────────────
+
+
+async def _enable_parking(db_session, yard):
+    yard.has_underground_parking = True
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_parking_offered_and_resolved_for_yard_resident(make_client, db_session, applicant, addr_tree):
+    await _enable_parking(db_session, addr_tree["yard"])
+    async with make_client(applicant) as ac:
+        listed = (await ac.get("/api/v2/profile/request-addresses")).json()
+        assert listed["parkings"] == [{"id": addr_tree["yard"].id, "label": "Двор А, подземный паркинг"}]
+        r = await ac.post("/api/v2/requests", json=_body("parking", addr_tree["yard"].id))
+    assert r.status_code == 201, r.text
+    req = (await db_session.execute(select(RequestModel))).scalars().one()
+    # Паркинг хранится как заявка уровня двора: отличает её текст адреса.
+    assert (req.address_type, req.yard_id, req.address) == ("yard", addr_tree["yard"].id, "Двор А, подземный паркинг")
+
+
+@pytest.mark.asyncio
+async def test_parking_not_offered_without_yard_flag(make_client, db_session, applicant, addr_tree):
+    async with make_client(applicant) as ac:
+        assert (await ac.get("/api/v2/profile/request-addresses")).json()["parkings"] == []
+        r = await ac.post("/api/v2/requests", json=_body("parking", addr_tree["yard"].id))
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_parking_of_foreign_yard_403(db_session, applicant, addr_tree):
+    foreign = Yard(name="Двор Чужой с паркингом", is_active=True, has_underground_parking=True)
+    db_session.add(foreign)
+    await db_session.commit()
+    with pytest.raises(AddressResolutionError) as e:
+        await resolve_request_address_async(db_session, applicant.id, "applicant", "parking", foreign.id)
+    assert e.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_parking_level_closed_for_inspector(db_session, inspector, addr_tree):
+    await _enable_parking(db_session, addr_tree["yard"])
+    with pytest.raises(AddressResolutionError) as e:
+        await resolve_request_address_async(db_session, inspector.id, "inspector", "parking", addr_tree["yard"].id)
+    assert e.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_parking_flag_is_set_by_manager_only(make_client, db_session, manager_user, applicant, addr_tree):
+    yard_id = addr_tree["yard"].id
+    async with make_client(applicant) as ac:
+        denied = await ac.patch(f"/api/v2/addresses/yards/{yard_id}", json={"has_underground_parking": True})
+    assert denied.status_code == 403
+    async with make_client(manager_user) as ac:
+        on = await ac.patch(f"/api/v2/addresses/yards/{yard_id}", json={"has_underground_parking": True})
+        assert on.status_code == 200 and on.json()["has_underground_parking"] is True
+        # «не задано» (null) галочку не трогает; false — снимает.
+        kept = await ac.patch(f"/api/v2/addresses/yards/{yard_id}", json={"has_underground_parking": None})
+        assert kept.json()["has_underground_parking"] is True
+        off = await ac.patch(f"/api/v2/addresses/yards/{yard_id}", json={"has_underground_parking": False})
+        assert off.json()["has_underground_parking"] is False
+
+
+@pytest.mark.asyncio
+async def test_address_id_out_of_int4_is_422_not_500(make_client, applicant, addr_tree):
+    async with make_client(applicant) as ac:
+        r = await ac.post("/api/v2/requests", json=_body("parking", 99999999999999999999))
+    assert r.status_code == 422

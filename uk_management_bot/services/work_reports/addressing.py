@@ -6,7 +6,9 @@ from typing import Optional
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.request_address import (
+    PARKING_SUFFIX,
     format_building_address,
+    format_parking_address,
     format_yard_address,
 )
 
@@ -39,6 +41,9 @@ def derive_public_address(request: Request) -> Optional[str]:
     ):
         return format_building_address(request.apartment_obj.building)
     if request.address_type == "yard" and request.yard_obj is not None:
+        # Паркинг двора — заявка уровня двора, отличает её только текст адреса.
+        if (request.address or "").endswith(PARKING_SUFFIX):
+            return format_parking_address(request.yard_obj)
         return format_yard_address(request.yard_obj)
     return None
 

@@ -24,7 +24,7 @@ import { isElevatorsEnabled } from '../../../utils/featureFlags'
 // FS-04: category — канон-EN-ключ, шлём как есть (CATEGORIES из общего constants).
 // urgency — тоже канон-ключи (TASK 17). Преобразование EN→RU удалено.
 
-type AddressType = 'yard' | 'building' | 'apartment'
+type AddressType = 'yard' | 'building' | 'apartment' | 'parking'
 
 interface AddressItem {
   id: number
@@ -36,6 +36,8 @@ interface RequestAddresses {
   yards: AddressItem[]
   buildings: AddressItem[]
   apartments: AddressItem[]
+  /** Подземные паркинги дворов жителя: id — id двора. */
+  parkings?: AddressItem[]
 }
 
 // Явный лимит на загрузку одного фото: twaClient создан без timeout, а
@@ -134,6 +136,7 @@ export default function CreatePage() {
     const pool: AddressItem[] =
       addressType === 'apartment' ? addresses.apartments
       : addressType === 'building' ? addresses.buildings
+      : addressType === 'parking' ? addresses.parkings ?? []
       : addresses.yards
     const stillValid = pool.some((a) => a.id === addressId)
     if (!stillValid) {
@@ -289,6 +292,10 @@ export default function CreatePage() {
       {addressSection('apartment', '🏠', addresses.apartments)}
       {addressSection('building', '🏢', addresses.buildings)}
       {addressSection('yard', '🏘️', addresses.yards)}
+      {addressSection('parking', '🅿️', (addresses.parkings ?? []).map((p) => (
+        // Подпись сервера — канон на русском; показываем «двор, паркинг» на языке жителя.
+        { ...p, label: `${addresses.yards.find((y) => y.id === p.id)?.label ?? p.label}, ${t('twa.create.undergroundParking')}` }
+      )))}
     </div>,
     ...(elevatorStep ? [elevatorStep] : []),
     // Step 2: Description

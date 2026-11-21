@@ -48,7 +48,7 @@ from uk_management_bot.database.models import (
 # staff_group — контекст staff-группы Group Intake (фаза 2): сотрудник заводит
 # репорт на дом или двор из справочника; квартирный уровень запрещён схемой.
 ROLE_ALLOWED_LEVELS: dict[str, tuple[str, ...]] = {
-    "applicant": ("yard", "building", "apartment"),
+    "applicant": ("yard", "building", "apartment", "parking"),
     "inspector": ("building",),
     "staff_group": ("yard", "building"),
     # Менеджер (колл-центр): любой активный двор/дом/квартира — заявки без
@@ -60,7 +60,13 @@ ROLE_ALLOWED_LEVELS: dict[str, tuple[str, ...]] = {
 # (403 «чужой» для них не существует — есть только 422 «нет/неактивен»).
 UNSCOPED_ROLES = frozenset({"inspector", "staff_group", "manager"})
 
-ADDRESS_TYPES = ("yard", "building", "apartment")
+# "parking" — подземный паркинг двора (галочка Yard.has_underground_parking):
+# выбирается по id двора, хранится как заявка уровня двора с адресом
+# «<двор>, подземный паркинг».
+# ponytail: паркинг отличает только текст адреса; отдельная колонка в requests
+# понадобится, когда по паркингу нужен будет фильтр или отчёт.
+ADDRESS_TYPES = ("yard", "building", "apartment", "parking")
+PARKING_SUFFIX = ", подземный паркинг"
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,10 @@ class AddressResolutionError(Exception):
 
 def format_yard_address(yard: Yard) -> str:
     return yard.name
+
+
+def format_parking_address(yard: Yard) -> str:
+    return f"{yard.name}{PARKING_SUFFIX}"  # html-raw: канонический адрес для БД/API, экранируется при показе
 
 
 def format_building_address(building: Building) -> str:
@@ -140,6 +150,8 @@ def _exists_stmt(address_type: str, address_id: int):
 
     Нужна, чтобы отличить «чужой» (403) от «нет/неактивен» (422).
     """
+    if address_type == "parking":
+        return _exists_stmt("yard", address_id).where(Yard.has_underground_parking.is_(True))
     if address_type == "yard":
         return select(Yard).where(Yard.id == address_id, Yard.is_active.is_(True))
     if address_type == "building":
@@ -178,6 +190,8 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
     бы пропустить любой ресурс, где у юзера есть доступ к ДРУГОМУ. Регресс
     покрыт test_resolver_foreign_yard_403 / test_resolver_foreign_building_403.
     """
+    if address_type == "parking":  # паркинг двора доступен тем же, кому доступен двор
+        return _member_stmt("yard", address_id, user_id).where(Yard.has_underground_parking.is_(True))
     if address_type == "yard":
         via_apartment = exists().where(
             and_(
@@ -243,6 +257,10 @@ def _member_stmt(address_type: str, address_id: int, user_id: int):
 
 
 def _build_resolved(address_type: str, obj) -> ResolvedAddress:
+    if address_type == "parking":
+        return ResolvedAddress(
+            address_type="yard", yard_id=obj.id, canonical_address=format_parking_address(obj)
+        )
     if address_type == "yard":
         return ResolvedAddress(
             address_type="yard", yard_id=obj.id, canonical_address=format_yard_address(obj)
@@ -383,6 +401,9 @@ def _available_apartments_stmt(user_id: int):
 
 def _serialize_available(yards, buildings, apartments) -> dict:
     return {
+        "parkings": [
+            {"id": y.id, "label": format_parking_address(y)} for y in yards if y.has_underground_parking
+        ],
         "yards": [
             {"id": y.id, "label": format_yard_address(y)} for y in yards
         ],

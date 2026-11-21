@@ -59,6 +59,10 @@ def localize_address(address: str, language: str) -> str:
     elif address.startswith("Двор: "):
         address = "Hovli: " + address[6:]
 
+    # «<двор>, подземный паркинг» — канон из request_address.format_parking_address.
+    if address.endswith(", подземный паркинг"):
+        address = address[: -len("подземный паркинг")] + get_text("address.underground_parking", language=language)
+
     # "кв. 54" / "кв. 12А" → "54-{apartment_short}" (узбекский формат: значение
     # перед суффиксом). COD-09: apartment_number — freeform ("12А", "3/1"), не
     # только числа; расширяем класс до [\w/-]+ (как в building-ветке ниже).
