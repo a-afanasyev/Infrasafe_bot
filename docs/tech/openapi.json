@@ -7887,6 +7887,24 @@
         "title": "LayoutItemIn",
         "type": "object"
       },
+      "LocalizedOut": {
+        "properties": {
+          "ru": {
+            "title": "Ru",
+            "type": "string"
+          },
+          "uz": {
+            "title": "Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ru",
+          "uz"
+        ],
+        "title": "LocalizedOut",
+        "type": "object"
+      },
       "LocalizedText": {
         "properties": {
           "ru": {
@@ -10538,6 +10556,162 @@
           "template"
         ],
         "title": "ProblemBody",
+        "type": "object"
+      },
+      "ProblemOut": {
+        "properties": {
+          "area": {
+            "enum": [
+              "building",
+              "category",
+              "executor",
+              "process",
+              "quality"
+            ],
+            "title": "Area",
+            "type": "string"
+          },
+          "description": {
+            "$ref": "#/components/schemas/LocalizedOut"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/LocalizedOut"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedOut"
+          }
+        },
+        "required": [
+          "title",
+          "severity",
+          "area",
+          "description",
+          "recommendation",
+          "evidence"
+        ],
+        "title": "ProblemOut",
+        "type": "object"
+      },
+      "ProblemsReportOut": {
+        "properties": {
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemOut"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "request_count": {
+            "title": "Request Count",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/LocalizedOut"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "first",
+          "last",
+          "generated_at",
+          "model",
+          "request_count",
+          "truncated",
+          "summary",
+          "problems"
+        ],
+        "title": "ProblemsReportOut",
+        "type": "object"
+      },
+      "ProblemsStartOut": {
+        "properties": {
+          "status": {
+            "const": "started",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ProblemsStartOut",
+        "type": "object"
+      },
+      "ProblemsStatusOut": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "busy": {
+            "title": "Busy",
+            "type": "boolean"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "boolean"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProblemsReportOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "running",
+          "busy",
+          "failed",
+          "report"
+        ],
+        "title": "ProblemsStatusOut",
         "type": "object"
       },
       "ProcurementOut": {
@@ -27213,6 +27387,126 @@
           }
         ],
         "summary": "Export Executors",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/problems": {
+      "get": {
+        "description": "Последний отчёт ИИ за период и идёт ли прогон (дашборд опрашивает).",
+        "operationId": "get_problems_api_v2_requests_stats_problems_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Problems",
+        "tags": [
+          "requests"
+        ]
+      },
+      "post": {
+        "description": "Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с.",
+        "operationId": "start_problems_api_v2_requests_stats_problems_post",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemsStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Problems",
         "tags": [
           "requests"
         ]

@@ -444,6 +444,14 @@
       "superadmin_only": false,
       "title": "Дашборд: кнопка прикрепить фото к заявке"
     },
+    "requests.problems": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "ИИ-разбор проблем по заявкам"
+    },
     "requests.read_all": {
       "roles": [
         "engineer",

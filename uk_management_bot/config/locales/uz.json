@@ -2969,7 +2969,10 @@
     "executed": "Ijrochilar bajargan: {count}",
     "returned": "Qaytarilganlar: {count}",
     "avg_work": "O'rtacha ish vaqti: {hours} soat",
-    "top": "Qabul qilinganlar bo'yicha eng yaxshi ijrochilar:"
+    "top": "Qabul qilinganlar bo'yicha eng yaxshi ijrochilar:",
+    "problems_title": "🔎 <b>SI tahlili: {month} uchun e'tibor berish kerak bo'lgan masalalar</b>",
+    "problems_requests": "Arizalar:",
+    "problems_more": "To'liq tahlil — dashbordda: {url}"
   },
   "engineering": {
     "unassigned": "⚠️ <b>InfraSafe eskalatsiyasi muhandissiz</b>\n#{request_number} ariza («Muhandislik tekshiruvi») hech kimga tayinlanmagan: muhandis yo'q. Ijrochini qo'lda tayinlang yoki «Muhandis» rolini bering.",

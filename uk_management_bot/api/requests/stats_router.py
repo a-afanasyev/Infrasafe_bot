@@ -18,12 +18,14 @@ from starlette.concurrency import run_in_threadpool
 
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import stats_service
+from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import load_config
 from uk_management_bot.services.request_analytics import csv_export
 from uk_management_bot.services.request_analytics import official_report, official_xlsx
 from uk_management_bot.services.request_analytics import operations
 from uk_management_bot.services.request_analytics import period as P
+from uk_management_bot.services.request_analytics import problems, problems_runs
 from uk_management_bot.services.request_analytics import quality as quality_service
 from uk_management_bot.services.request_analytics.executors import executor_summaries
 
@@ -413,3 +415,93 @@ async def get_costs(
         by_category={k: float(v) for k, v in data.by_category.items()},
         by_building=[BuildingCostOut(id=i, name=n, amount=float(a)) for i, n, a in data.by_building],
     )
+
+
+# ---------------------------------------------------------------------------
+# ИИ-разбор проблем (docs/tech/ANALYTICS.md §4b)
+# ---------------------------------------------------------------------------
+
+_PROBLEMS = require_action("requests.problems")
+
+
+class LocalizedOut(BaseModel):
+    ru: str
+    uz: str
+
+
+class ProblemOut(BaseModel):
+    title: LocalizedOut
+    severity: Literal["critical", "high", "medium"]
+    area: Literal["building", "category", "executor", "process", "quality"]
+    description: LocalizedOut
+    recommendation: LocalizedOut
+    evidence: list[str]
+
+
+class ProblemsReportOut(BaseModel):
+    first: date
+    last: date
+    generated_at: datetime
+    model: str
+    request_count: int
+    truncated: bool
+    summary: LocalizedOut
+    problems: list[ProblemOut]
+
+
+class ProblemsStatusOut(BaseModel):
+    available: bool
+    running: bool
+    #: Идёт прогон ДРУГОГО периода — замок общий на площадку, кнопка ждёт.
+    busy: bool
+    failed: bool
+    report: Optional[ProblemsReportOut]
+
+
+class ProblemsStartOut(BaseModel):
+    status: Literal["started"]
+
+
+def _problems_period(period: Period) -> Period:
+    if (period.last - period.first).days + 1 > problems.MAX_DAYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"ИИ-разбор: период не длиннее {problems.MAX_DAYS} дней")
+    return period
+
+
+@router.get("/stats/problems", response_model=ProblemsStatusOut)
+async def get_problems(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_PROBLEMS),
+):
+    """Последний отчёт ИИ за период и идёт ли прогон (дашборд опрашивает)."""
+    data = await problems_runs.run_status(db, period.first, period.last)
+    report = data["report"]
+    return ProblemsStatusOut(
+        available=settings.AI_MANAGER_ENABLED, running=data["running"], busy=data["busy"],
+        failed=data["failed"],
+        report=ProblemsReportOut(**report) if report else None,
+    )
+
+
+@router.post("/stats/problems", response_model=ProblemsStartOut, status_code=202)
+async def start_problems(
+    period: Period = Depends(get_period),
+    user: User = Depends(_PROBLEMS),
+):
+    """Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с."""
+    if not settings.AI_MANAGER_ENABLED:
+        raise HTTPException(status_code=404, detail="ИИ-разбор выключен на площадке")
+    period = _problems_period(period)
+    try:
+        result = await problems_runs.start_run(period.first, period.last, user.id)
+    except problems_runs.RedisUnavailable as exc:
+        raise HTTPException(status_code=503, detail="ИИ-разбор временно недоступен") from exc
+    if result == "busy":
+        raise HTTPException(status_code=409, detail="ИИ-разбор уже идёт, дождитесь результата")
+    if result == "limit":
+        # 409, не 429: фронтовый apiClient сам повторяет 429 (лимит edge-nginx).
+        raise HTTPException(status_code=409, detail="Исчерпан лимит ИИ-разборов на сегодня")
+    return ProblemsStartOut(status="started")

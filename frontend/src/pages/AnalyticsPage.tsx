@@ -22,6 +22,7 @@ import QualityTab from '../components/analytics/QualityTab'
 import BacklogTab from '../components/analytics/BacklogTab'
 import ChannelsTab from '../components/analytics/ChannelsTab'
 import ReportTab from '../components/analytics/ReportTab'
+import ProblemsTab from '../components/analytics/ProblemsTab'
 import { todayInDisplayTz } from '../utils/timezone'
 import {
   autoGranularity,
@@ -33,7 +34,7 @@ import {
   type PresetId,
 } from '../utils/analyticsPeriod'
 
-const TABS = ['overview', 'executors', 'quality', 'backlog', 'channels', 'report'] as const
+const TABS = ['overview', 'executors', 'quality', 'backlog', 'channels', 'report', 'problems'] as const
 type Tab = (typeof TABS)[number]
 /** Дневной срез длиннее года не предлагается (см. PeriodBar). */
 const DAY_SLICE_MAX_DAYS = 366
@@ -47,11 +48,13 @@ function ErrorBanner({ text }: { text: string }) {
 export default function AnalyticsPage() {
   const { t } = useTranslation()
   const canReport = useCan('requests.stats')
+  const canProblems = useCan('requests.problems')
   usePageTitle(t('nav.analytics'))
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   // «Отчёт» — выгрузка для проверяющих: только с правом на статистику (иначе сервер 403).
-  const tabs = canReport ? TABS : TABS.filter(key => key !== 'report')
+  // «Проблемы» — платный ИИ-разбор: своё действие requests.problems.
+  const tabs = TABS.filter(key => (key !== 'report' || canReport) && (key !== 'problems' || canProblems))
   const tab: Tab = (tabs as readonly string[]).includes(tabParam ?? '') ? (tabParam as Tab) : 'overview'
 
   const [preset, setPreset] = useState<PresetId>('thisMonth')
@@ -89,6 +92,7 @@ export default function AnalyticsPage() {
     backlog: [backlog, addresses],
     channels: [channels, costs],
     report: [],
+    problems: [],
   }[tab]
   const loading = valid && current.some(q => q.isLoading)
   const failed = current.some(q => q.isError)
@@ -134,6 +138,7 @@ export default function AnalyticsPage() {
           {tab === 'backlog' && <BacklogTab backlog={backlog.data} addresses={addresses.data} />}
           {tab === 'channels' && <ChannelsTab channels={channels.data} costs={costs.data} />}
           {tab === 'report' && activeRange && <ReportTab range={activeRange} />}
+          {tab === 'problems' && activeRange && <ProblemsTab range={activeRange} />}
         </>
       )}
     </div>

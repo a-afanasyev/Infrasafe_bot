@@ -359,6 +359,13 @@ class Settings:
         self.AI_MANAGER_MODEL = os.getenv("AI_MANAGER_MODEL", "claude-sonnet-5-5")
         self.AI_MANAGER_EFFORT = os.getenv("AI_MANAGER_EFFORT", "low")
         self.AI_MANAGER_LLM_TIMEOUT = float(os.getenv("AI_MANAGER_LLM_TIMEOUT", "8.0"))
+        # ИИ-разбор «Топ-10 проблем» аналитики (тот же гейт AI_MANAGER_ENABLED):
+        # редкий длинный вызов по всем заявкам периода — модель сильнее, effort выше.
+        self.AI_PROBLEMS_MODEL = os.getenv("AI_PROBLEMS_MODEL", "claude-opus-5-5")
+        self.AI_PROBLEMS_EFFORT = os.getenv("AI_PROBLEMS_EFFORT", "high")
+        self.AI_PROBLEMS_LLM_TIMEOUT = float(os.getenv("AI_PROBLEMS_LLM_TIMEOUT", "600"))
+        # Бюджет ручных прогонов по кнопке на площадку в сутки (≈ $1 за прогон).
+        self.AI_PROBLEMS_DAILY_LIMIT = int(os.getenv("AI_PROBLEMS_DAILY_LIMIT", "20"))
         # ── Мониторинг отключений (news-watch, фаза 3 ИИ-менеджера) ──────
         # DARK-гейт API-роутера /api/v2/news-watch (единый 404 без флага).
         # Сервисный токен юзербота news_watcher — ТОЛЬКО Doppler; пустой токен

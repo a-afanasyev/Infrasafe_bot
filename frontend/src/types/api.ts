@@ -160,6 +160,45 @@ export interface ReportRequestsOut {
   truncated: boolean
 }
 
+// ── ИИ-разбор проблем (/stats/problems) ──────────────────────────────────────
+export interface LocalizedText {
+  ru: string
+  uz: string
+}
+
+export type ProblemSeverity = 'critical' | 'high' | 'medium'
+export type ProblemArea = 'building' | 'category' | 'executor' | 'process' | 'quality'
+
+export interface ProblemOut {
+  title: LocalizedText
+  severity: ProblemSeverity
+  area: ProblemArea
+  description: LocalizedText
+  recommendation: LocalizedText
+  evidence: string[]
+}
+
+export interface ProblemsReportOut {
+  first: string
+  last: string
+  generated_at: string
+  model: string
+  request_count: number
+  truncated: boolean
+  summary: LocalizedText
+  problems: ProblemOut[]
+}
+
+export interface ProblemsStatusOut {
+  /** ИИ включён на площадке (AI_MANAGER_ENABLED + ключ). */
+  available: boolean
+  running: boolean
+  /** Идёт разбор другого периода: замок общий на площадку. */
+  busy: boolean
+  failed: boolean
+  report: ProblemsReportOut | null
+}
+
 export interface ExecutorStatsRow {
   user_id: number | null
   name: string | null

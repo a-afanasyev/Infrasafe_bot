@@ -10,6 +10,7 @@ import type {
   ChannelStatsOut,
   CostStatsOut,
   ExecutorStatsRow,
+  ProblemsStatusOut,
   QualityStatsOut,
   ReportRequestsOut,
   ReportScope,
@@ -144,6 +145,28 @@ export function exportOfficialReport(range: DateRange, opts: OfficialReportOptio
     opts,
     `official_report_${range.from}_${range.to}_${opts.lang}.xlsx`,
   )
+}
+
+/** Опрос статуса ИИ-разбора, пока идёт прогон (модель думает минуты). */
+const PROBLEMS_POLL_MS = 5_000
+
+/** Последний ИИ-разбор за период и идёт ли прогон; пока идёт — опрос. */
+export function useProblems(range: DateRange | null) {
+  return useQuery<ProblemsStatusOut>({
+    queryKey: ['request-stats', '/problems', range?.from, range?.to],
+    queryFn: () =>
+      apiClient.get(`${STATS}/problems`, { params: periodParams(range!) }).then(r => r.data),
+    enabled: range !== null,
+    refetchInterval: query => {
+      const data = query.state.data
+      return data?.running || data?.busy ? PROBLEMS_POLL_MS : false
+    },
+  })
+}
+
+/** Запустить ИИ-разбор в фоне (202); результат приходит через `useProblems`. */
+export function startProblems(range: DateRange): Promise<void> {
+  return apiClient.post(`${STATS}/problems`, null, { params: periodParams(range) }).then(() => undefined)
 }
 
 /** Таблица вкладки «Отчёт»: все поступившие или только принятые в периоде. */
