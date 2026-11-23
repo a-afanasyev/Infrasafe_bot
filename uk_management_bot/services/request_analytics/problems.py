@@ -95,6 +95,7 @@ class DigestRow:
     report: str
     hours: Optional[float]
     overdue: Optional[bool]
+    accepted: bool = False
 
 
 def scrub(text: Optional[str], limit: int) -> str:
@@ -172,6 +173,7 @@ async def load_rows(
             report=scrub(report, _TEXT_LIMITS["report"]),
             hours=hours,
             overdue=_overdue(status, urgency_key, hours, sla_hours),
+            accepted=status == REQUEST_STATUS_APPROVED,
         ))
     truncated = len(rows) > MAX_ROWS
     kept, used = [], 0
@@ -200,7 +202,7 @@ def _group_lines(title: str, rows: list[DigestRow], key, limit: int) -> list[str
     for name, items in ranked:
         avg = mean(float(r.rating) for r in items if r.rating is not None)
         lines.append(
-            f"{name} | {len(items)} | {sum(r.status == REQUEST_STATUS_APPROVED for r in items)}"  # html-raw: промпт модели
+            f"{name} | {len(items)} | {sum(r.accepted for r in items)}"  # html-raw: промпт модели
             f" | {sum(r.overdue is True for r in items)} | {sum(_returned(r) for r in items)}"
             f" | {'—' if avg is None else avg}"
         )
