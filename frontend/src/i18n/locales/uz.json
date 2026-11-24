@@ -52,7 +52,8 @@
       "wet": "Nam tozalash",
       "dry": "Quruq tozalash",
       "elevator": "Liftni yuvish",
-      "parking": "Avtoturargohga chiqishni tozalash"
+      "parking": "Avtoturargohga chiqishni tozalash",
+      "fire_stairs": "Yong'in zinapoyasini tozalash"
     },
     "day": {
       "0": "Du",
@@ -217,6 +218,7 @@
     "point": {
       "elevator": "Lift",
       "parking": "Avtoturargohga chiqish",
+      "fire_stairs": "Yong'in zinapoyasi",
       "entrance": "Kirish",
       "entry1": "1-kirish",
       "entry2": "2-kirish",
@@ -3006,6 +3008,7 @@
       "point": {
         "elevator": "Lift",
         "parking": "Avtoturargohga chiqish",
+        "fire_stairs": "Yong'in zinapoyasi",
         "entrance": "Kirish",
         "entry1": "1-kirish",
         "entry2": "2-kirish",
@@ -3015,7 +3018,8 @@
         "wet": "Nam tozalash",
         "dry": "Quruq tozalash",
         "elevator": "Liftni yuvish",
-        "parking": "Avtoturargohga chiqishni tozalash"
+        "parking": "Avtoturargohga chiqishni tozalash",
+        "fire_stairs": "Yong'in zinapoyasini tozalash"
       },
       "shootEach": "Qavatni yuvdingizmi — suratga oling. Surat belgi hisoblanadi.",
       "progress": "{{total}} tadan {{done}} tasi olindi",
