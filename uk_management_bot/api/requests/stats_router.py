@@ -477,9 +477,9 @@ class ProblemsStartOut(BaseModel):
 
 
 def _hhmm(moment: Optional[datetime]) -> str:
-    from uk_management_bot.utils.business_time import BUSINESS_TZ
+    from uk_management_bot.utils.business_time import fmt_day_month_time
 
-    return moment.astimezone(BUSINESS_TZ).strftime("%d.%m %H:%M") if moment else "—"
+    return fmt_day_month_time(moment) if moment else "—"
 
 
 async def _problems_limits(db: AsyncSession) -> dict:
