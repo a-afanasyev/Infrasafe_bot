@@ -70,6 +70,10 @@ class FakeRedis:
         self.keys[key] = int(self.keys.get(key, 0)) + 1
         return self.keys[key]
 
+    async def decr(self, key):
+        self.keys[key] = int(self.keys.get(key, 0)) - 1
+        return self.keys[key]
+
     async def expire(self, key, ttl):
         return True
 
@@ -260,6 +264,11 @@ async def manager_client(db_session_factory, manager_user):
     app.dependency_overrides.clear()
 
 
+def interval_passed(redis) -> None:
+    """Как будто интервал после прошлого старта уже истёк."""
+    redis.keys.pop(R.LAST_START_KEY, None)
+
+
 async def set_limits(db_session, **limits):
     """Ограничения ai.problems в конфиге БД (страница «Правила ИИ»)."""
     from uk_management_bot.services.auto_manager.config import save_config
@@ -269,9 +278,12 @@ async def set_limits(db_session, **limits):
 
 @pytest_asyncio.fixture
 async def ai_on(monkeypatch, db_session, db_session_factory):
-    """ИИ включён; без кулдаунов, лимит суток 2 — тесты потока не упираются в интервалы."""
+    """ИИ включён; без кулдауна периода, интервал 1 мин (минимум), лимит суток 2.
+
+    Несколько запусков подряд в тесте — через ``interval_passed(redis)``.
+    """
     monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
-    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=0, daily_limit=2)
+    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=1, daily_limit=2)
     spawned = []
     monkeypatch.setattr(R, "_spawn", spawned.append)
     monkeypatch.setattr(R, "_session_factory", lambda: db_session_factory)
@@ -318,10 +330,11 @@ async def test_manual_run_switched_off_in_ai_rules(manager_client, ai_on, redis,
 @pytest.mark.asyncio
 async def test_fresh_report_blocks_rerun_of_same_period(
         manager_client, ai_on, redis, llm, seeded, db_session):
-    await set_limits(db_session, rerun_cooldown_minutes=60, min_interval_minutes=0, daily_limit=5)
+    await set_limits(db_session, rerun_cooldown_minutes=60, min_interval_minutes=1, daily_limit=5)
     llm.answer = llm_answer(["261005-001"])
     assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
     await ai_on.pop()
+    interval_passed(redis)
     again = await manager_client.post(URL, params=OCTOBER)
     assert again.status_code == 409 and "свежий" in again.json()["detail"]
     status = (await manager_client.get(URL, params=OCTOBER)).json()
@@ -345,7 +358,7 @@ async def test_min_interval_between_any_runs(manager_client, ai_on, redis, llm, 
 
 
 @pytest.mark.parametrize("problems", [
-    {"daily_limit": 0}, {"daily_limit": 101}, {"min_interval_minutes": -1},
+    {"daily_limit": 0}, {"daily_limit": 31}, {"min_interval_minutes": 0},
     {"rerun_cooldown_minutes": 10081}, {"manual_enabled": "yes"}, {"unknown": 1},
 ])
 def test_ai_problems_config_validation(problems):
@@ -392,11 +405,54 @@ async def test_run_flow_busy_done_and_limit(manager_client, ai_on, redis, llm, s
     assert other["report"] is None, "отчёт привязан к точному периоду"
     assert R.RUNNING_KEY not in redis.keys, "замок снят после прогона"
 
+    interval_passed(redis)
     assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
     await ai_on.pop()
+    interval_passed(redis)
     limited = await manager_client.post(URL, params=OCTOBER)
     assert limited.status_code == 409 and "лимит" in limited.json()["detail"], "лимит суток = 2"
     assert R.RUNNING_KEY not in redis.keys, "замок снят при отказе по лимиту"
+
+
+@pytest.mark.asyncio
+async def test_refusal_does_not_spend_slot_or_interval(manager_client, ai_on, redis, llm, seeded, db_session):
+    """Отказ по лимиту не продлевает интервал и не накручивает счётчик суток."""
+    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=1, daily_limit=1)
+    llm.answer = llm_answer(["261005-001"])
+    assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
+    await ai_on.pop()
+    interval_passed(redis)
+    for _ in range(5):
+        assert (await manager_client.post(URL, params=OCTOBER)).status_code == 409
+    assert R.LAST_START_KEY not in redis.keys, "отказ не ставит метку интервала"
+    assert int(redis.keys[R._day_key()]) == 1, "отказы не накручивают счётчик"
+    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=1, daily_limit=3)  # действует сразу
+    assert (await manager_client.get(URL, params=OCTOBER)).json()["runs_left"] == 2
+    assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_failed_run_gives_back_daily_slot(manager_client, ai_on, redis, llm, seeded):
+    llm.answer = None  # модель не ответила
+    assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
+    await ai_on.pop()
+    assert int(redis.keys[R._day_key()]) == 0, "сбой модели не съедает слот суток"
+    assert R.LAST_START_KEY in redis.keys, "интервал остаётся — не долбить кнопкой при сбоях"
+
+
+@pytest.mark.asyncio
+async def test_recent_reports_are_distinct_periods(db_session, seeded, llm):
+    llm.answer = llm_answer(["261005-001"])
+    for _ in range(40):  # частые повторы одного периода не вытесняют остальные
+        report = await P.analyze_problems(db_session, date(2026, 10, 1), date(2026, 10, 31), SLA, NOW)
+        await R.store_report(db_session, report, user_id=None, trigger="manual")
+    september = await P.analyze_problems(db_session, date(2026, 9, 1), date(2026, 9, 30), SLA, NOW)
+    await R.store_report(db_session, september, user_id=None, trigger="manual")
+    for _ in range(40):
+        await R.store_report(db_session, report, user_id=None, trigger="manual")
+    recent = await R.recent_reports(db_session)
+    assert [(r["first"], r["last"]) for r in recent] == [
+        ("2026-10-01", "2026-10-31"), ("2026-09-01", "2026-09-30")]
 
 
 @pytest.mark.asyncio
@@ -427,7 +483,7 @@ async def test_finished_run_does_not_release_newer_lock(redis, monkeypatch, db_s
 
     monkeypatch.setattr(R, "run_report", fake_run)
     monkeypatch.setattr(R, "_session_factory", lambda: db_session_factory)
-    await R._background(date(2026, 10, 1), date(2026, 10, 31), 1, "old-run")
+    await R._background(date(2026, 10, 1), date(2026, 10, 31), 1, "old-run", "ai:problems:day:t")
     assert redis.keys[R.RUNNING_KEY] == "newer-run"
 
 
@@ -441,7 +497,7 @@ async def test_cancelled_run_releases_lock_and_marks_failed(redis, monkeypatch, 
     monkeypatch.setattr(R, "run_report", hang)
     monkeypatch.setattr(R, "_session_factory", lambda: db_session_factory)
     redis.keys[R.RUNNING_KEY] = "me"
-    task = asyncio.create_task(R._background(date(2026, 10, 1), date(2026, 10, 31), 1, "me"))
+    task = asyncio.create_task(R._background(date(2026, 10, 1), date(2026, 10, 31), 1, "me", "ai:problems:day:t"))
     await asyncio.sleep(0)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):

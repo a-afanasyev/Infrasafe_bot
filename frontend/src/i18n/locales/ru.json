@@ -4770,7 +4770,7 @@
       "rerun_cooldown_minutes": "Повтор того же периода, мин",
       "rerun_cooldown_minutesHint": "не раньше, чем через N минут после разбора ({{low}}–{{high}}; 0 — без ограничения)",
       "min_interval_minutes": "Интервал между запусками, мин",
-      "min_interval_minutesHint": "между любыми двумя запусками ({{low}}–{{high}}; 0 — без ограничения)",
+      "min_interval_minutesHint": "между любыми двумя запусками ({{low}}–{{high}})",
       "daily_limit": "Запусков в сутки",
       "daily_limitHint": "на площадку, по кнопке ({{low}}–{{high}})"
     },

@@ -94,6 +94,18 @@ describe('ProblemsTab', () => {
     expect(screen.getByRole('button', { name: /Разобрать заново/ })).toBeDisabled()
   })
 
+  it('ограничение кончилось — кнопка оживает сама, без перезагрузки', async () => {
+    let calls = 0
+    server.use(http.get(PATH, () => HttpResponse.json(++calls === 1
+      ? { ...status, report: REPORT, next_run_at: new Date(Date.now() + 500).toISOString() }
+      : { ...status, report: REPORT })))
+    renderTab()
+    expect(await screen.findByRole('button', { name: /Разобрать заново/ })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Разобрать заново/ })).toBeEnabled(),
+      { timeout: 4000 })
+    expect(calls).toBe(2)
+  })
+
   it('последние разборы других периодов открываются кликом', async () => {
     status = {
       ...status,

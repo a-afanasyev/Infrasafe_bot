@@ -4745,7 +4745,7 @@
       "rerun_cooldown_minutes": "Shu davrni qayta tahlil, daq",
       "rerun_cooldown_minutesHint": "tahlildan keyin N daqiqadan oldin emas ({{low}}–{{high}}; 0 — cheklovsiz)",
       "min_interval_minutes": "Ishga tushirishlar oralig'i, daq",
-      "min_interval_minutesHint": "har qanday ikki ishga tushirish orasida ({{low}}–{{high}}; 0 — cheklovsiz)",
+      "min_interval_minutesHint": "har qanday ikki ishga tushirish orasida ({{low}}–{{high}})",
       "daily_limit": "Bir kunda ishga tushirishlar",
       "daily_limitHint": "maydon uchun, tugma orqali ({{low}}–{{high}})"
     },

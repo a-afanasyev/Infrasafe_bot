@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
@@ -15,6 +15,8 @@ import { Panel, RequestLink } from './shared'
 
 /** Совпадает с MAX_DAYS сервиса (`services/request_analytics/problems.py`). */
 export const PROBLEMS_MAX_DAYS = 92
+/** Предел setTimeout (~24.8 сут.); ограничение суток короче. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1
 
 const SEVERITY_COLOR: Record<ProblemSeverity, string> = {
   critical: 'var(--red)',
@@ -113,6 +115,18 @@ export default function ProblemsTab({ range, onPickRange }: Props) {
   const waitUntil = data?.next_run_at && new Date(data.next_run_at).getTime() > Date.now()
     ? data.next_run_at : null
   const report = data?.report ?? null
+
+  // Ограничение кончилось — перезапросить статус ровно в этот момент: кнопка
+  // оживает сама (опрос без конца бил бы сервер у всех, кто держит вкладку).
+  const { refetch } = status
+  const nextRunAt = data?.next_run_at ?? null
+  useEffect(() => {
+    if (!canRun || !nextRunAt) return
+    const ms = new Date(nextRunAt).getTime() - Date.now()
+    if (ms <= 0) return
+    const id = setTimeout(() => { void refetch() }, Math.min(ms + 1000, MAX_TIMEOUT_MS))
+    return () => clearTimeout(id)
+  }, [canRun, nextRunAt, refetch])
 
   const run = async () => {
     setStarting(true)

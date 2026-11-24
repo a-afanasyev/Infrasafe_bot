@@ -149,7 +149,6 @@ export function exportOfficialReport(range: DateRange, opts: OfficialReportOptio
 
 /** Опрос статуса ИИ-разбора, пока идёт прогон (модель думает минуты). */
 const PROBLEMS_POLL_MS = 5_000
-const PROBLEMS_WAIT_POLL_MS = 30_000
 
 /** Последний ИИ-разбор за период и идёт ли прогон; пока идёт — опрос. */
 export function useProblems(range: DateRange | null) {
@@ -158,11 +157,10 @@ export function useProblems(range: DateRange | null) {
     queryFn: () =>
       apiClient.get(`${STATS}/problems`, { params: periodParams(range!) }).then(r => r.data),
     enabled: range !== null,
+    // Окончание ограничения (`next_run_at`) ловит таймер во вкладке — без постоянного опроса.
     refetchInterval: query => {
       const data = query.state.data
-      if (data?.running || data?.busy) return PROBLEMS_POLL_MS
-      // Ждём окончания ограничения — кнопка оживёт сама, без перезагрузки страницы.
-      return data?.next_run_at ? PROBLEMS_WAIT_POLL_MS : false
+      return data?.running || data?.busy ? PROBLEMS_POLL_MS : false
     },
   })
 }

@@ -47,7 +47,8 @@ describe('AiManagerPage', () => {
     const daily = await screen.findByLabelText('Запусков в сутки')
     await user.clear(daily)
     await user.type(daily, '500')
-    expect(daily).toHaveAttribute('aria-invalid', 'true')   // 500 > 100 — поле подсвечено, в черновик не попало
+    expect(daily).toHaveAttribute('aria-invalid', 'true')   // 500 > 30 — поле подсвечено, в черновик не попало
+    expect(screen.getByText('Сохранить правила')).toBeDisabled()   // видимое ≠ черновик — сохранять нельзя
     await user.clear(daily)
     await user.type(daily, '3')
     const interval = screen.getByLabelText('Интервал между запусками, мин')
