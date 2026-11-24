@@ -42,6 +42,30 @@ interface AuthState {
 type SetUser = (patch: Partial<AuthState>) => void
 
 let bootstrapInFlight: Promise<void> | null = null
+let revalidateInFlight: Promise<void> | null = null
+
+/**
+ * Тихо обновить роли/права вкладки, восстановленной из sessionStorage.
+ *
+ * Без этого вкладка, открытая до выкатки нового действия RBAC (или до смены
+ * прав в «Роли и права»), жила со старым списком `actions` до закрытия — F5
+ * не помогал (sessionStorage переживает перезагрузку), и кнопки по новым
+ * правам были скрыты. Один GET без refresh-фолбэка и без редиректа: истёкшую
+ * сессию разрулит обычный поток apiClient на следующем запросе, а второй
+ * refresh-запрос здесь мог бы отозвать всю family как reuse (AUD7-CODE-01).
+ */
+function revalidateProfile(set: SetUser, get: () => AuthState): Promise<void> {
+  if (!revalidateInFlight) {
+    revalidateInFlight = publicClient.get('/api/v2/profile')
+      .then(({ data }) => {
+        // Пока шёл запрос, пользователь мог выйти — не воскрешать сессию.
+        if (get().isAuthenticated) set({ user: data })
+      })
+      .catch(() => {})
+      .finally(() => { revalidateInFlight = null })
+  }
+  return revalidateInFlight
+}
 
 async function probeSession(set: SetUser): Promise<void> {
   try {
@@ -82,6 +106,8 @@ export const useAuthStore = create<AuthState>()(
         // выкатки RBAC: без повторного запроса профиля гейты скрыли бы всё.
         if (get().isAuthenticated && get().user?.actions) {
           set({ hydrating: false })
+          // Показываем сразу, права освежаем в фоне (новые действия после выкатки).
+          void revalidateProfile(set, get)
           return Promise.resolve()
         }
         if (!bootstrapInFlight) {
