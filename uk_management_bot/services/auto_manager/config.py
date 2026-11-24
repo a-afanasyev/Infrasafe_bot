@@ -59,6 +59,18 @@ DEFAULT_CONFIG: dict = {
         # Переопределения текстов пингов: {"sla.executor_overdue": {"ru": …,
         # "uz": …}} — контракт в ai_manager/templates.py.
         "templates": {},
+        # ИИ-разбор «Топ-10 проблем» (services/request_analytics/problems*.py):
+        # кнопка в аналитике и разбор в ежемесячном отчёте + ограничения запусков.
+        "problems": {
+            "manual_enabled": True,
+            "monthly_enabled": True,
+            # Тот же период повторно — не раньше, чем через N минут после разбора.
+            "rerun_cooldown_minutes": 60,
+            # Между любыми двумя запусками на площадке.
+            "min_interval_minutes": 5,
+            # Запусков по кнопке в сутки на площадку (бизнес-сутки Ташкента).
+            "daily_limit": 10,
+        },
     },
     # SLA-лестница ИИ-менеджера (фаза 2, только при mode="ai"). Часы, int;
     # 0 = ступень/трек выключены. `ladder` — смещения в часах от момента
@@ -153,7 +165,29 @@ def _validate_ai(raw: object) -> dict:
         "news_instructions": _validate_instructions(merged["news_instructions"], "ai.news_instructions"),
         "extra_emergency_keywords": _validate_keywords(merged["extra_emergency_keywords"]),
         "templates": validate_overrides(merged["templates"]),
+        "problems": _validate_problems(raw.get("problems")),
     }
+
+
+#: Границы ограничений ИИ-разбора: (min, max) — защита от опечаток и от «0 = без лимита».
+_PROBLEMS_RANGES = {
+    "rerun_cooldown_minutes": (0, 7 * 24 * 60),
+    "min_interval_minutes": (0, 24 * 60),
+    "daily_limit": (1, 100),
+}
+
+
+def _validate_problems(raw: object) -> dict:
+    """Блок ``ai.problems``: два выключателя и ограничения запусков (целые в диапазонах)."""
+    merged = _merge_block(raw, DEFAULT_CONFIG["ai"]["problems"], "ai.problems")
+    for key in ("manual_enabled", "monthly_enabled"):
+        if not isinstance(merged[key], bool):
+            raise ValueError(f"ai.problems.{key}: ожидается bool, получено {merged[key]!r}")
+    for key, (low, high) in _PROBLEMS_RANGES.items():
+        value = merged[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            raise ValueError(f"ai.problems.{key}: ожидается целое {low}..{high}, получено {value!r}")
+    return merged
 
 
 def _validate_instructions(value: object, field_name: str) -> str:

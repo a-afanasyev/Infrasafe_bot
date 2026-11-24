@@ -10689,6 +10689,25 @@
             "title": "Failed",
             "type": "boolean"
           },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/RecentProblemsOut"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
           "report": {
             "anyOf": [
               {
@@ -10702,6 +10721,17 @@
           "running": {
             "title": "Running",
             "type": "boolean"
+          },
+          "runs_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs Left"
           }
         },
         "required": [
@@ -10709,7 +10739,10 @@
           "running",
           "busy",
           "failed",
-          "report"
+          "next_run_at",
+          "runs_left",
+          "report",
+          "recent"
         ],
         "title": "ProblemsStatusOut",
         "type": "object"
@@ -11784,6 +11817,39 @@
           "unit_price"
         ],
         "title": "ReceiptCreate",
+        "type": "object"
+      },
+      "RecentProblemsOut": {
+        "properties": {
+          "first": {
+            "format": "date",
+            "title": "First",
+            "type": "string"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "last": {
+            "format": "date",
+            "title": "Last",
+            "type": "string"
+          }
+        },
+        "required": [
+          "first",
+          "last",
+          "generated_at"
+        ],
+        "title": "RecentProblemsOut",
         "type": "object"
       },
       "RefreshRequestOptional": {
@@ -27394,7 +27460,7 @@
     },
     "/api/v2/requests/stats/problems": {
       "get": {
-        "description": "Последний отчёт ИИ за период и идёт ли прогон (дашборд опрашивает).",
+        "description": "Последний отчёт ИИ за период, идёт ли прогон, когда можно запускать (дашборд опрашивает).",
         "operationId": "get_problems_api_v2_requests_stats_problems_get",
         "parameters": [
           {
@@ -27453,7 +27519,7 @@
         ]
       },
       "post": {
-        "description": "Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с.",
+        "description": "Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с.\n\nОтказы по ограничениям «Правил ИИ» — 409 (не 429: фронтовый apiClient сам\nповторяет 429 — это лимит edge-nginx).",
         "operationId": "start_problems_api_v2_requests_stats_problems_post",
         "parameters": [
           {

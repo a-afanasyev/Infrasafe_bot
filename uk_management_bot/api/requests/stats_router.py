@@ -421,7 +421,8 @@ async def get_costs(
 # ИИ-разбор проблем (docs/tech/ANALYTICS.md §4b)
 # ---------------------------------------------------------------------------
 
-_PROBLEMS = require_action("requests.problems")
+#: Запускать платный разбор — только менеджер; смотреть готовый — все с доступом к аналитике.
+_PROBLEMS_RUN = require_action("requests.problems")
 
 
 class LocalizedOut(BaseModel):
@@ -449,17 +450,40 @@ class ProblemsReportOut(BaseModel):
     problems: list[ProblemOut]
 
 
+class RecentProblemsOut(BaseModel):
+    first: date
+    last: date
+    generated_at: Optional[datetime]
+
+
 class ProblemsStatusOut(BaseModel):
+    #: ИИ на площадке и кнопка включена в «Правилах ИИ».
     available: bool
     running: bool
     #: Идёт прогон ДРУГОГО периода — замок общий на площадку, кнопка ждёт.
     busy: bool
     failed: bool
+    #: Раньше этого момента запуск отклонят (свежий отчёт, интервал, лимит суток).
+    next_run_at: Optional[datetime]
+    #: Сколько запусков по кнопке осталось на сегодня (None — неизвестно без Redis).
+    runs_left: Optional[int]
     report: Optional[ProblemsReportOut]
+    #: Последние разборы разных периодов — открыть готовое вместо нового запуска.
+    recent: list[RecentProblemsOut]
 
 
 class ProblemsStartOut(BaseModel):
     status: Literal["started"]
+
+
+def _hhmm(moment: Optional[datetime]) -> str:
+    from uk_management_bot.utils.business_time import BUSINESS_TZ
+
+    return moment.astimezone(BUSINESS_TZ).strftime("%d.%m %H:%M") if moment else "—"
+
+
+async def _problems_limits(db: AsyncSession) -> dict:
+    return (await load_config(db))["ai"]["problems"]
 
 
 def _problems_period(period: Period) -> Period:
@@ -474,34 +498,47 @@ def _problems_period(period: Period) -> Period:
 async def get_problems(
     period: Period = Depends(get_period),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(_PROBLEMS),
+    _user: User = Depends(_STATS),
 ):
-    """Последний отчёт ИИ за период и идёт ли прогон (дашборд опрашивает)."""
-    data = await problems_runs.run_status(db, period.first, period.last)
+    """Последний отчёт ИИ за период, идёт ли прогон, когда можно запускать (дашборд опрашивает)."""
+    limits = await _problems_limits(db)
+    data = await problems_runs.run_status(db, period.first, period.last, limits)
     report = data["report"]
     return ProblemsStatusOut(
-        available=settings.AI_MANAGER_ENABLED, running=data["running"], busy=data["busy"],
-        failed=data["failed"],
+        available=settings.AI_MANAGER_ENABLED and limits["manual_enabled"],
+        running=data["running"], busy=data["busy"], failed=data["failed"],
+        next_run_at=data["next_run_at"], runs_left=data["runs_left"],
         report=ProblemsReportOut(**report) if report else None,
+        recent=[RecentProblemsOut(**r) for r in data["recent"]],
     )
 
 
 @router.post("/stats/problems", response_model=ProblemsStartOut, status_code=202)
 async def start_problems(
     period: Period = Depends(get_period),
-    user: User = Depends(_PROBLEMS),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_PROBLEMS_RUN),
 ):
-    """Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с."""
+    """Запустить ИИ-разбор в фоне: модель думает минуты, edge режет запрос на 30 с.
+
+    Отказы по ограничениям «Правил ИИ» — 409 (не 429: фронтовый apiClient сам
+    повторяет 429 — это лимит edge-nginx).
+    """
     if not settings.AI_MANAGER_ENABLED:
         raise HTTPException(status_code=404, detail="ИИ-разбор выключен на площадке")
     period = _problems_period(period)
     try:
-        result = await problems_runs.start_run(period.first, period.last, user.id)
+        outcome = await problems_runs.start_run(
+            db, period.first, period.last, user.id, await _problems_limits(db))
     except problems_runs.RedisUnavailable as exc:
         raise HTTPException(status_code=503, detail="ИИ-разбор временно недоступен") from exc
-    if result == "busy":
-        raise HTTPException(status_code=409, detail="ИИ-разбор уже идёт, дождитесь результата")
-    if result == "limit":
-        # 409, не 429: фронтовый apiClient сам повторяет 429 (лимит edge-nginx).
-        raise HTTPException(status_code=409, detail="Исчерпан лимит ИИ-разборов на сегодня")
+    refusals = {
+        "disabled": "Запуск ИИ-разбора выключен в «Правилах ИИ»",
+        "busy": "ИИ-разбор уже идёт, дождитесь результата",
+        "fresh": f"Разбор этого периода свежий — повторно после {_hhmm(outcome.retry_at)}",
+        "interval": f"Слишком часто — следующий разбор после {_hhmm(outcome.retry_at)}",
+        "limit": "Исчерпан лимит ИИ-разборов на сегодня",
+    }
+    if outcome.status in refusals:
+        raise HTTPException(status_code=409, detail=refusals[outcome.status])
     return ProblemsStartOut(status="started")

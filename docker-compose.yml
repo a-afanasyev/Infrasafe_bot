@@ -68,7 +68,6 @@ services:
       - AI_PROBLEMS_MODEL=${AI_PROBLEMS_MODEL:-claude-opus-5-5}
       - AI_PROBLEMS_EFFORT=${AI_PROBLEMS_EFFORT:-high}
       - AI_PROBLEMS_LLM_TIMEOUT=${AI_PROBLEMS_LLM_TIMEOUT:-600}
-      - AI_PROBLEMS_DAILY_LIMIT=${AI_PROBLEMS_DAILY_LIMIT:-20}
 
       # Настройки логирования
       - LOG_LEVEL=INFO
@@ -260,7 +259,6 @@ services:
       - AI_PROBLEMS_MODEL=${AI_PROBLEMS_MODEL:-claude-opus-5-5}
       - AI_PROBLEMS_EFFORT=${AI_PROBLEMS_EFFORT:-high}
       - AI_PROBLEMS_LLM_TIMEOUT=${AI_PROBLEMS_LLM_TIMEOUT:-600}
-      - AI_PROBLEMS_DAILY_LIMIT=${AI_PROBLEMS_DAILY_LIMIT:-20}
       # Мониторинг отключений (dark без NEWS_WATCH_ENABLED): конвейер и LLM живут в api,
       # сервисный токен — для inbox юзербота.
       - NEWS_WATCH_ENABLED=${NEWS_WATCH_ENABLED:-false}

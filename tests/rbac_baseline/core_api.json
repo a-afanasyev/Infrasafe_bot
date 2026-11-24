@@ -1505,6 +1505,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",

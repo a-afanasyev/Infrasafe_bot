@@ -8,8 +8,9 @@ import EmptyState from '../shared/EmptyState'
 import { startProblems, useProblems } from '../../hooks/useAnalytics'
 import { apiErrorDetail } from '../../utils/errorMessage'
 import { daysInRange, type DateRange } from '../../utils/analyticsPeriod'
-import { formatDateTime } from '../../utils/timezone'
-import type { LocalizedText, ProblemOut, ProblemSeverity } from '../../types/api'
+import { useCan } from '../../hooks/useCan'
+import { formatDate, formatDateTime } from '../../utils/timezone'
+import type { LocalizedText, ProblemOut, ProblemSeverity, RecentProblemsOut } from '../../types/api'
 import { Panel, RequestLink } from './shared'
 
 /** Совпадает с MAX_DAYS сервиса (`services/request_analytics/problems.py`). */
@@ -65,20 +66,52 @@ function ProblemCard({ index, problem }: { index: number; problem: ProblemOut })
   )
 }
 
-interface Props {
+/** Последние разборы других периодов: открыть готовое вместо нового платного запуска. */
+function RecentReports({ items, range, onPick }: {
+  items: RecentProblemsOut[]
   range: DateRange
+  onPick: (range: DateRange) => void
+}) {
+  const { t } = useTranslation()
+  const others = items.filter(r => r.first !== range.from || r.last !== range.to)
+  if (others.length === 0) return null
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+      <span className="text-text-muted">{t('analytics.problems.recent')}:</span>
+      {others.map(r => (
+        <button
+          key={`${r.first}-${r.last}`}
+          type="button"
+          onClick={() => onPick({ from: r.first, to: r.last })}
+          className="px-2 py-0.5 rounded-sm border border-border-default bg-bg-surface text-text-secondary hover:border-border-active hover:text-text-primary cursor-pointer"
+          title={r.generated_at ? formatDateTime(r.generated_at) : undefined}
+        >
+          {formatDate(r.first)} — {formatDate(r.last)}
+        </button>
+      ))}
+    </div>
+  )
 }
 
-export default function ProblemsTab({ range }: Props) {
+interface Props {
+  range: DateRange
+  /** Открыть готовый разбор другого периода (переключает период страницы). */
+  onPickRange: (range: DateRange) => void
+}
+
+export default function ProblemsTab({ range, onPickRange }: Props) {
   const { t } = useTranslation()
   const pick = useLocalized()
   const queryClient = useQueryClient()
+  const canRun = useCan('requests.problems')
   const status = useProblems(range)
   const [starting, setStarting] = useState(false)
   const data = status.data
   const tooLong = daysInRange(range) > PROBLEMS_MAX_DAYS
   const running = Boolean(data?.running) || starting
   const busy = Boolean(data?.busy) && !running
+  const waitUntil = data?.next_run_at && new Date(data.next_run_at).getTime() > Date.now()
+    ? data.next_run_at : null
   const report = data?.report ?? null
 
   const run = async () => {
@@ -93,28 +126,38 @@ export default function ProblemsTab({ range }: Props) {
     }
   }
 
-  const hint = !data?.available
-    ? t('analytics.problems.unavailable')
-    : tooLong
-      ? t('analytics.problems.tooLong', { days: PROBLEMS_MAX_DAYS })
-      : busy
-        ? t('analytics.problems.busy')
-        : t('analytics.problems.hint')
+  const hint = !canRun
+    ? t('analytics.problems.viewOnly')
+    : !data?.available
+      ? t('analytics.problems.unavailable')
+      : tooLong
+        ? t('analytics.problems.tooLong', { days: PROBLEMS_MAX_DAYS })
+        : busy
+          ? t('analytics.problems.busy')
+          : waitUntil
+            ? t('analytics.problems.waitUntil', { time: formatDateTime(waitUntil) })
+            : t('analytics.problems.hint')
 
   return (
     <div className="flex flex-col gap-4">
       <Panel
         title={t('analytics.problems.title')}
-        actions={
-          <Button onClick={run} disabled={running || busy || tooLong || !data?.available}>
+        actions={canRun && (
+          <Button onClick={run} disabled={running || busy || tooLong || Boolean(waitUntil) || !data?.available}>
             <Sparkles className="size-4" aria-hidden />
             {running
               ? t('analytics.problems.running')
               : report ? t('analytics.problems.rerun') : t('analytics.problems.run')}
           </Button>
-        }
+        )}
       >
         <p className="text-[13px] text-text-muted">{running ? t('analytics.problems.runningHint') : hint}</p>
+        {canRun && data?.available && data.runs_left !== null && !running && (
+          <p className="mt-1 text-[12px] text-text-muted">
+            {t('analytics.problems.runsLeft', { count: data.runs_left })}
+          </p>
+        )}
+        <RecentReports items={data?.recent ?? []} range={range} onPick={onPickRange} />
         {data?.failed && !running && (
           <div className="mt-3 p-3 px-4 rounded-sm bg-red/10 border border-red/30 text-red text-[13px]">
             {t('analytics.problems.failed')}

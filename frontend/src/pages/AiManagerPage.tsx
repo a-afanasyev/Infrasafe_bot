@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AiBreakerBanner from '../components/aiManager/AiBreakerBanner'
 import AiTemplatesEditor from '../components/aiManager/AiTemplatesEditor'
 import AiTriageForm from '../components/aiManager/AiTriageForm'
+import AiProblemsForm from '../components/aiManager/AiProblemsForm'
 import SlaEditor from '../components/shifts/AutoManagerSlaEditor'
 import type { AutoManagerConfigOut } from '../types/autoManagerConfig'
 
@@ -119,6 +120,12 @@ export default function AiManagerPage() {
         <span className="text-[13px] font-semibold text-text-primary">{t('aiManager.triage.title')}</span>
         <AiTriageForm value={draft.ai} baseKeywords={data.base_emergency_keywords}
           onChange={(ai) => setDraft({ ...draft, ai })} />
+      </section>
+
+      <section className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-3">
+        <span className="text-[13px] font-semibold text-text-primary">{t('aiManager.problems.title')}</span>
+        <AiProblemsForm value={draft.ai.problems}
+          onChange={(problems) => setDraft({ ...draft, ai: { ...draft.ai, problems } })} />
       </section>
 
       <section className="bg-bg-card border border-border-default rounded-default p-5">

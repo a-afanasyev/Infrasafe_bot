@@ -2481,6 +2481,10 @@
       "runningHint": "SI davr arizalarini o'qimoqda — odatda 1–3 daqiqa. Sahifadan chiqib ketish mumkin, natija saqlanadi.",
       "unavailable": "Bu maydonda SI ulanmagan.",
       "busy": "Hozir boshqa davr tahlil qilinmoqda — u tugagach tugma faollashadi.",
+      "viewOnly": "Tahlil hamma uchun umumiy. Uni menejer ishga tushiradi — davr uchun hisobot bo'lmasa, menejerdan so'rang.",
+      "waitUntil": "Keyingi tahlilni {{time}} dan keyin ishga tushirish mumkin — «SI qoidalari» cheklovi.",
+      "runsLeft": "Bugun qolgan ishga tushirishlar: {{count}}",
+      "recent": "Oxirgi tahlillar",
       "tooLong": "Tahlil uchun {{days}} kundan oshmaydigan davrni tanlang.",
       "failed": "Tahlil amalga oshmadi. Keyinroq qayta urinib ko'ring.",
       "startFailed": "Tahlilni boshlab bo'lmadi",
@@ -4509,7 +4513,7 @@
       "requests.own": "Muallifning o'z arizasi bilan amallari: yangisini bekor qilish, baholash",
       "requests.photos.attach": "Boshqaruv paneli: arizaga foto biriktirish tugmasi",
       "requests.read_all": "Istalgan arizani ko'rish: kartochka va ro'yxat «o'zimniki/tayinlangan» cheklovisiz",
-      "requests.problems": "Arizalar bo'yicha muammolarni SI tahlili",
+      "requests.problems": "Arizalar bo'yicha SI tahlilini ishga tushirish",
       "requests.stats": "Arizalar statistikasi",
       "requests.update": "Arizani tahrirlash (biznes tekshiruvlari ichida)",
       "residents.manage": "Aholi: ro'yxat, kartochka, moderatsiya, hujjatlar",
@@ -4732,6 +4736,18 @@
       "reset": "Saqlagichni tiklash",
       "resetDone": "Saqlagich tiklandi",
       "resetFailed": "Saqlagichni tiklab bo'lmadi"
+    },
+    "problems": {
+      "title": "Muammolarning SI tahlili (analitika)",
+      "subtitle": "«Muammolar (SI)» yorlig'idagi «Muammolarni topish» tugmasi va menejerlarga oylik hisobotda o'tgan oy tahlili. Hisobot umumiy: uni analitikaga kirish huquqi bor hamma ko'radi. Har bir ishga tushirish — modelga pullik so'rov.",
+      "manual_enabled": "Tugma orqali ishga tushirishga ruxsat",
+      "monthly_enabled": "Oylik hisobotdagi tahlil (bot, har oyning 1-sanasi)",
+      "rerun_cooldown_minutes": "Shu davrni qayta tahlil, daq",
+      "rerun_cooldown_minutesHint": "tahlildan keyin N daqiqadan oldin emas ({{low}}–{{high}}; 0 — cheklovsiz)",
+      "min_interval_minutes": "Ishga tushirishlar oralig'i, daq",
+      "min_interval_minutesHint": "har qanday ikki ishga tushirish orasida ({{low}}–{{high}}; 0 — cheklovsiz)",
+      "daily_limit": "Bir kunda ishga tushirishlar",
+      "daily_limitHint": "maydon uchun, tugma orqali ({{low}}–{{high}})"
     },
     "triage": {
       "title": "Arizalar triaji",

@@ -1,11 +1,18 @@
-"""Прогоны ИИ-разбора проблем: запуск в фоне, блокировка, хранение, статус.
+"""Прогоны ИИ-разбора проблем: запуск в фоне, ограничения, хранение, статус.
 
 Вызов модели идёт минуты, а edge режет запрос на 30 с — поэтому кнопка дашборда
-ставит фоновую задачу (202) и опрашивает статус. Состояние в Redis:
+ставит фоновую задачу (202) и опрашивает статус. Отчёт общий для площадки: его
+видят все с доступом к аналитике, повторный запуск ради того же периода не нужен.
 
+Ограничения — блок ``ai.problems`` конфига ИИ (страница «Правила ИИ»):
+``manual_enabled``/``monthly_enabled``, ``rerun_cooldown_minutes`` (тот же период),
+``min_interval_minutes`` (любые запуски), ``daily_limit`` (запусков по кнопке в сутки).
+
+Состояние в Redis:
 * ``ai:problems:running`` — один прогон на площадку одновременно (NX + TTL,
   значение — маркер прогона; снимает только свой прогон);
-* ``ai:problems:day:<дата>`` — суточный бюджет ручных прогонов;
+* ``ai:problems:interval`` — минимальный интервал между запусками (TTL);
+* ``ai:problems:day:<дата>`` — счётчик запусков по кнопке за бизнес-сутки;
 * ``ai:problems:monthly:<YYYY-MM>`` — ежемесячный разбор не чаще раза в месяц;
 * ``ai:problems:failed:<период>`` — последний прогон периода не удался;
 * результат — строка ``audit_logs`` (``ai_problems_report``), история без миграции.
@@ -19,7 +26,8 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from sqlalchemy import select
@@ -36,16 +44,27 @@ logger = logging.getLogger(__name__)
 
 AUDIT_ACTION = "ai_problems_report"
 RUNNING_KEY = "ai:problems:running"
+INTERVAL_KEY = "ai:problems:interval"
 DAY_KEY = "ai:problems:day:{day}"
 MONTHLY_KEY = "ai:problems:monthly:{month}"
 FAILED_KEY = "ai:problems:failed:{first}:{last}"
 FAILED_TTL_SECONDS = 600
 MONTHLY_TTL_SECONDS = 40 * 24 * 3600
+#: Сколько последних разборов (разных периодов) показывать на вкладке.
+RECENT_LIMIT = 5
+_RECENT_SCAN = 30
 
-StartResult = Literal["started", "busy", "limit"]
+StartStatus = Literal["started", "disabled", "busy", "fresh", "interval", "limit"]
 
 # Ссылки на фоновые задачи: без них asyncio может собрать задачу сборщиком мусора.
 _tasks: set[asyncio.Task] = set()
+
+
+@dataclass(frozen=True)
+class StartOutcome:
+    status: StartStatus
+    #: Когда запуск снова станет возможен (для ``fresh``/``interval``/``limit``).
+    retry_at: Optional[datetime] = None
 
 
 class RedisUnavailable(RuntimeError):
@@ -62,10 +81,18 @@ def _failed_key(first: date, last: date) -> str:
     return FAILED_KEY.format(first=first.isoformat(), last=last.isoformat())
 
 
+def _day_key() -> str:
+    return DAY_KEY.format(day=business_today().isoformat())
+
+
 def _session_factory():
     from uk_management_bot.database.session import AsyncSessionLocal
 
     return AsyncSessionLocal
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _lock_ttl() -> int:
@@ -109,6 +136,35 @@ async def latest_report(db: AsyncSession, first: date, last: date) -> Optional[d
     return details if isinstance(details, dict) else None
 
 
+async def recent_reports(db: AsyncSession) -> list[dict]:
+    """Последние разборы разных периодов: [{first, last, generated_at}], свежие первыми."""
+    rows = await db.execute(
+        select(AuditLog.details["first"].as_string(), AuditLog.details["last"].as_string(),
+               AuditLog.details["generated_at"].as_string())
+        .where(AuditLog.action == AUDIT_ACTION)
+        .order_by(AuditLog.id.desc())
+        .limit(_RECENT_SCAN)
+    )
+    seen: dict[tuple, dict] = {}
+    for first, last, generated_at in rows.all():
+        if first and last and (first, last) not in seen:
+            seen[(first, last)] = {"first": first, "last": last, "generated_at": generated_at}
+    return list(seen.values())[:RECENT_LIMIT]
+
+
+def _fresh_until(report: Optional[dict], cooldown_minutes: int) -> Optional[datetime]:
+    """До какого момента отчёт периода считается свежим (повтор запрещён)."""
+    if report is None or cooldown_minutes <= 0:
+        return None
+    try:
+        generated = datetime.fromisoformat(report["generated_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if generated.tzinfo is None:
+        generated = generated.replace(tzinfo=timezone.utc)
+    return generated + timedelta(minutes=cooldown_minutes)
+
+
 async def run_report(
     session_factory, first: date, last: date, *, user_id: Optional[int], trigger: str,
 ) -> Optional[ProblemsReport]:
@@ -116,7 +172,7 @@ async def run_report(
     try:
         async with session_factory() as db:
             sla_hours = (await load_config(db))["sla_hours"]
-            report = await analyze_problems(db, first, last, sla_hours, datetime.now(timezone.utc))
+            report = await analyze_problems(db, first, last, sla_hours, _now())
             if report is not None:
                 await store_report(db, report, user_id=user_id, trigger=trigger)
             return report
@@ -145,8 +201,26 @@ def _spawn(coro) -> None:
     task.add_done_callback(_tasks.discard)
 
 
-async def start_run(first: date, last: date, user_id: int) -> StartResult:
-    """Поставить прогон в фон; ``busy`` — уже идёт, ``limit`` — исчерпан бюджет суток."""
+async def _ttl_until(redis, key: str) -> Optional[datetime]:
+    ttl = await redis.ttl(key)
+    return _now() + timedelta(seconds=ttl) if ttl and ttl > 0 else None
+
+
+async def _tomorrow_start() -> datetime:
+    from uk_management_bot.utils.business_time import business_days_window
+
+    tomorrow = business_today() + timedelta(days=1)
+    return business_days_window(tomorrow, tomorrow)[0]
+
+
+async def start_run(db: AsyncSession, first: date, last: date, user_id: int,
+                    limits: dict) -> StartOutcome:
+    """Поставить прогон в фон, если позволяют ограничения ``ai.problems``."""
+    if not limits["manual_enabled"]:
+        return StartOutcome("disabled")
+    fresh = _fresh_until(await latest_report(db, first, last), limits["rerun_cooldown_minutes"])
+    if fresh is not None and fresh > _now():
+        return StartOutcome("fresh", fresh)
     try:
         redis = await _redis()
         marker = await _acquire(redis, first, last, user_id)
@@ -154,15 +228,18 @@ async def start_run(first: date, last: date, user_id: int) -> StartResult:
         logger.warning("ai_problems: Redis недоступен: %s", type(exc).__name__)
         raise RedisUnavailable from exc
     if marker is None:
-        return "busy"
+        return StartOutcome("busy")
     try:
-        day_key = DAY_KEY.format(day=business_today().isoformat())
-        used = await redis.incr(day_key)
-        if used == 1:
-            await redis.expire(day_key, 2 * 24 * 3600)
-        if used > settings.AI_PROBLEMS_DAILY_LIMIT:
+        interval = limits["min_interval_minutes"] * 60
+        if interval and not await redis.set(INTERVAL_KEY, "1", nx=True, ex=interval):
             await _release(redis, marker)
-            return "limit"
+            return StartOutcome("interval", await _ttl_until(redis, INTERVAL_KEY))
+        used = await redis.incr(_day_key())
+        if used == 1:
+            await redis.expire(_day_key(), 2 * 24 * 3600)
+        if used > limits["daily_limit"]:
+            await _release(redis, marker)
+            return StartOutcome("limit", await _tomorrow_start())
         await redis.delete(_failed_key(first, last))
     except Exception as exc:  # noqa: BLE001 — замок не оставляем висеть
         logger.warning("ai_problems: Redis сбой при старте: %s", type(exc).__name__)
@@ -172,11 +249,20 @@ async def start_run(first: date, last: date, user_id: int) -> StartResult:
             pass
         raise RedisUnavailable from exc
     _spawn(_background(first, last, user_id, marker))
-    return "started"
+    return StartOutcome("started")
 
 
 async def run_monthly(session_factory, first: date, last: date) -> Optional[ProblemsReport]:
-    """Разбор месяца для автоотчёта: раз в месяц, под общим замком, без Redis — нет."""
+    """Разбор месяца для автоотчёта: если включён, раз в месяц, под общим замком, без Redis — нет."""
+    try:
+        async with session_factory() as db:
+            limits = (await load_config(db))["ai"]["problems"]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ai_problems: конфиг недоступен, месячный разбор пропущен: %s", type(exc).__name__)
+        return None
+    if not limits["monthly_enabled"]:
+        logger.info("ai_problems: месячный разбор выключен в «Правилах ИИ»")
+        return None
     try:
         redis = await _redis()
         month_key = MONTHLY_KEY.format(month=first.isoformat()[:7])
@@ -200,9 +286,16 @@ async def run_monthly(session_factory, first: date, last: date) -> Optional[Prob
             logger.warning("ai_problems: замок не снят: %s", type(exc).__name__)
 
 
-async def run_status(db: AsyncSession, first: date, last: date) -> dict:
-    """Для опроса дашбордом: прогон этого периода / другого (``busy``), сбой, отчёт."""
+async def run_status(db: AsyncSession, first: date, last: date, limits: dict) -> dict:
+    """Для опроса дашбордом: прогон этого периода / другого (``busy``), сбой, отчёт,
+    когда снова можно запускать и сколько запусков осталось на сегодня."""
+    report = await latest_report(db, first, last)
     running = busy = failed = False
+    waits: list[datetime] = []
+    runs_left: Optional[int] = None
+    fresh = _fresh_until(report, limits["rerun_cooldown_minutes"])
+    if fresh is not None and fresh > _now():
+        waits.append(fresh)
     try:
         redis = await _redis()
         marker = await redis.get(RUNNING_KEY)
@@ -211,7 +304,14 @@ async def run_status(db: AsyncSession, first: date, last: date) -> dict:
             running = (data.get("first"), data.get("last")) == (first.isoformat(), last.isoformat())
             busy = not running
         failed = bool(await redis.get(_failed_key(first, last)))
+        interval_until = await _ttl_until(redis, INTERVAL_KEY)
+        if interval_until:
+            waits.append(interval_until)
+        runs_left = max(0, limits["daily_limit"] - int(await redis.get(_day_key()) or 0))
+        if runs_left == 0:
+            waits.append(await _tomorrow_start())
     except Exception as exc:  # noqa: BLE001 — статус best-effort: покажем хотя бы отчёт
         logger.warning("ai_problems: статус без Redis: %s", type(exc).__name__)
     return {"running": running, "busy": busy, "failed": failed and not running,
-            "report": await latest_report(db, first, last)}
+            "next_run_at": max(waits) if waits else None, "runs_left": runs_left,
+            "report": report, "recent": await recent_reports(db)}

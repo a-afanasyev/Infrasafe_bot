@@ -450,7 +450,7 @@
       ],
       "approved_only": false,
       "superadmin_only": false,
-      "title": "ИИ-разбор проблем по заявкам"
+      "title": "Запуск ИИ-разбора проблем по заявкам"
     },
     "requests.read_all": {
       "roles": [

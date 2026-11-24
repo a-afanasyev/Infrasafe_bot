@@ -189,14 +189,26 @@ export interface ProblemsReportOut {
   problems: ProblemOut[]
 }
 
+export interface RecentProblemsOut {
+  first: string
+  last: string
+  generated_at: string | null
+}
+
 export interface ProblemsStatusOut {
-  /** ИИ включён на площадке (AI_MANAGER_ENABLED + ключ). */
+  /** ИИ включён на площадке (AI_MANAGER_ENABLED + ключ) и кнопка включена в «Правилах ИИ». */
   available: boolean
   running: boolean
   /** Идёт разбор другого периода: замок общий на площадку. */
   busy: boolean
   failed: boolean
+  /** Раньше этого момента запуск отклонят (свежий отчёт, интервал, лимит суток). */
+  next_run_at: string | null
+  /** Сколько запусков осталось на сегодня (null — неизвестно). */
+  runs_left: number | null
   report: ProblemsReportOut | null
+  /** Последние разборы разных периодов — открыть готовое вместо нового запуска. */
+  recent: RecentProblemsOut[]
 }
 
 export interface ExecutorStatsRow {

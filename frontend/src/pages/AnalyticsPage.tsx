@@ -48,13 +48,12 @@ function ErrorBanner({ text }: { text: string }) {
 export default function AnalyticsPage() {
   const { t } = useTranslation()
   const canReport = useCan('requests.stats')
-  const canProblems = useCan('requests.problems')
   usePageTitle(t('nav.analytics'))
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  // «Отчёт» — выгрузка для проверяющих: только с правом на статистику (иначе сервер 403).
-  // «Проблемы» — платный ИИ-разбор: своё действие requests.problems.
-  const tabs = TABS.filter(key => (key !== 'report' || canReport) && (key !== 'problems' || canProblems))
+  // «Отчёт» и «Проблемы (ИИ)» — только с правом на статистику (иначе сервер 403).
+  // Готовый ИИ-разбор видят все с этим правом; запуск — отдельное действие requests.problems.
+  const tabs = canReport ? TABS : TABS.filter(key => key !== 'report' && key !== 'problems')
   const tab: Tab = (tabs as readonly string[]).includes(tabParam ?? '') ? (tabParam as Tab) : 'overview'
 
   const [preset, setPreset] = useState<PresetId>('thisMonth')
@@ -138,7 +137,15 @@ export default function AnalyticsPage() {
           {tab === 'backlog' && <BacklogTab backlog={backlog.data} addresses={addresses.data} />}
           {tab === 'channels' && <ChannelsTab channels={channels.data} costs={costs.data} />}
           {tab === 'report' && activeRange && <ReportTab range={activeRange} />}
-          {tab === 'problems' && activeRange && <ProblemsTab range={activeRange} />}
+          {tab === 'problems' && activeRange && (
+            <ProblemsTab
+              range={activeRange}
+              onPickRange={next => {
+                setPreset('custom')
+                setRange(next)
+              }}
+            />
+          )}
         </>
       )}
     </div>

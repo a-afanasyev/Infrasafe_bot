@@ -364,8 +364,8 @@ class Settings:
         self.AI_PROBLEMS_MODEL = os.getenv("AI_PROBLEMS_MODEL", "claude-opus-5-5")
         self.AI_PROBLEMS_EFFORT = os.getenv("AI_PROBLEMS_EFFORT", "high")
         self.AI_PROBLEMS_LLM_TIMEOUT = float(os.getenv("AI_PROBLEMS_LLM_TIMEOUT", "600"))
-        # Бюджет ручных прогонов по кнопке на площадку в сутки (≈ $1 за прогон).
-        self.AI_PROBLEMS_DAILY_LIMIT = int(os.getenv("AI_PROBLEMS_DAILY_LIMIT", "20"))
+        # Ограничения запусков (лимит в сутки, интервалы, выключатели) — в конфиге
+        # ИИ `ai.problems`, страница «Правила ИИ»; здесь только деплой-уровень.
         # ── Мониторинг отключений (news-watch, фаза 3 ИИ-менеджера) ──────
         # DARK-гейт API-роутера /api/v2/news-watch (единый 404 без флага).
         # Сервисный токен юзербота news_watcher — ТОЛЬКО Doppler; пустой токен

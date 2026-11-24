@@ -19,7 +19,9 @@ const CONFIG = {
   enabled: true, mode: 'ai', window_start: '20:00', window_end: '08:00', timezone: 'Asia/Tashkent',
   max_requests_per_run: 10, sla_hours: { critical: 4, high: 24, medium: 72, low: 168 },
   ai: { min_confidence: 0.7, clarify_enabled: true, dedup_enabled: true, triage_instructions: '', news_instructions: '',
-        extra_emergency_keywords: [], templates: {} },
+        extra_emergency_keywords: [], templates: {},
+        problems: { manual_enabled: true, monthly_enabled: true, rerun_cooldown_minutes: 60,
+                    min_interval_minutes: 5, daily_limit: 10 } },
   sla: { in_progress_max: { low: 72, medium: 48, high: 12, critical: 2 }, clarification_max: 48,
          executed_unconfirmed_max: 24, completed_unaccepted_days: 3, critical_unassigned_minutes: 30,
          ladder: { remind_executor: 0, staff_group: 2, manager: 4, reassign: 8 },
@@ -34,6 +36,32 @@ beforeEach(() => {
 })
 
 describe('AiManagerPage', () => {
+  it('saves AI problems limits; an out-of-range value never reaches the draft', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+      body = (await request.json()) as Record<string, unknown>
+      return HttpResponse.json({ ...CONFIG, ...body })
+    }))
+    const user = userEvent.setup()
+    render(<AiManagerPage />)
+    const daily = await screen.findByLabelText('Запусков в сутки')
+    await user.clear(daily)
+    await user.type(daily, '500')
+    expect(daily).toHaveAttribute('aria-invalid', 'true')   // 500 > 100 — поле подсвечено, в черновик не попало
+    await user.clear(daily)
+    await user.type(daily, '3')
+    const interval = screen.getByLabelText('Интервал между запусками, мин')
+    await user.clear(interval)
+    await user.type(interval, '15')
+    await user.click(screen.getByLabelText('Разбор в ежемесячном отчёте (бот, 1-го числа)'))
+    await user.click(screen.getByText('Сохранить правила'))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect((body!.ai as Record<string, unknown>).problems).toEqual({
+      manual_enabled: true, monthly_enabled: false, rerun_cooldown_minutes: 60,
+      min_interval_minutes: 15, daily_limit: 3,
+    })
+  })
+
   it('saves instructions, extra keywords and a template override in one PUT without read-only fields', async () => {
     let body: Record<string, unknown> | null = null
     server.use(http.put('*/api/v2/auto-manager-config', async ({ request }) => {

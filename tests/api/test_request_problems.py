@@ -47,12 +47,18 @@ def llm_answer(evidence, **over) -> dict:
 class FakeRedis:
     def __init__(self):
         self.keys = {}
+        self.ttls = {}
 
     async def set(self, key, value, nx=False, ex=None):
         if nx and key in self.keys:
             return None
         self.keys[key] = value
+        if ex:
+            self.ttls[key] = ex
         return True
+
+    async def ttl(self, key):
+        return self.ttls.get(key, -1) if key in self.keys else -2
 
     async def get(self, key):
         return self.keys.get(key)
@@ -254,10 +260,18 @@ async def manager_client(db_session_factory, manager_user):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def ai_on(monkeypatch, db_session_factory):
+async def set_limits(db_session, **limits):
+    """Ограничения ai.problems в конфиге БД (страница «Правила ИИ»)."""
+    from uk_management_bot.services.auto_manager.config import save_config
+
+    await save_config(db_session, {"ai": {"problems": limits}})
+
+
+@pytest_asyncio.fixture
+async def ai_on(monkeypatch, db_session, db_session_factory):
+    """ИИ включён; без кулдаунов, лимит суток 2 — тесты потока не упираются в интервалы."""
     monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
-    monkeypatch.setattr(settings, "AI_PROBLEMS_DAILY_LIMIT", 2)
+    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=0, daily_limit=2)
     spawned = []
     monkeypatch.setattr(R, "_spawn", spawned.append)
     monkeypatch.setattr(R, "_session_factory", lambda: db_session_factory)
@@ -273,12 +287,72 @@ async def test_executor_forbidden(db_session_factory, seeded):
 
 
 @pytest.mark.asyncio
-async def test_post_disabled_without_ai(manager_client, monkeypatch):
+async def test_engineer_sees_report_but_cannot_run(db_session, db_session_factory, ai_on, redis):
+    engineer = User(telegram_id=820009, roles=json.dumps(["engineer"]), active_role="engineer",
+                    status="approved", language="ru", first_name="И", last_name="Н")
+    db_session.add(engineer)
+    await db_session.commit()
+    async with await _client(db_session_factory, engineer) as ac:
+        assert (await ac.get(URL, params=OCTOBER)).status_code == 200, "отчёт видят все с аналитикой"
+        assert (await ac.post(URL, params=OCTOBER)).status_code == 403, "запуск — только менеджер"
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_post_disabled_without_ai(manager_client, monkeypatch, redis):
     monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", False)
     assert (await manager_client.post(URL, params=OCTOBER)).status_code == 404
     status = (await manager_client.get(URL, params=OCTOBER)).json()
-    assert status == {"available": False, "running": False, "busy": False, "failed": False,
-                      "report": None}
+    assert status["available"] is False and status["running"] is False and status["report"] is None
+    assert status["runs_left"] == 10 and status["next_run_at"] is None and status["recent"] == []
+
+
+@pytest.mark.asyncio
+async def test_manual_run_switched_off_in_ai_rules(manager_client, ai_on, redis, db_session):
+    await set_limits(db_session, manual_enabled=False)
+    resp = await manager_client.post(URL, params=OCTOBER)
+    assert resp.status_code == 409 and "выключен" in resp.json()["detail"] and not ai_on
+    assert (await manager_client.get(URL, params=OCTOBER)).json()["available"] is False
+
+
+@pytest.mark.asyncio
+async def test_fresh_report_blocks_rerun_of_same_period(
+        manager_client, ai_on, redis, llm, seeded, db_session):
+    await set_limits(db_session, rerun_cooldown_minutes=60, min_interval_minutes=0, daily_limit=5)
+    llm.answer = llm_answer(["261005-001"])
+    assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
+    await ai_on.pop()
+    again = await manager_client.post(URL, params=OCTOBER)
+    assert again.status_code == 409 and "свежий" in again.json()["detail"]
+    status = (await manager_client.get(URL, params=OCTOBER)).json()
+    assert status["next_run_at"] is not None and status["report"] is not None
+    assert status["recent"][0]["first"] == "2026-10-01", "готовый разбор виден в «последних»"
+    september = {"date_from": "2026-09-01", "date_to": "2026-09-30"}
+    assert (await manager_client.post(URL, params=september)).status_code == 202, "другой период можно"
+
+
+@pytest.mark.asyncio
+async def test_min_interval_between_any_runs(manager_client, ai_on, redis, llm, seeded, db_session):
+    await set_limits(db_session, rerun_cooldown_minutes=0, min_interval_minutes=5, daily_limit=5)
+    llm.answer = llm_answer(["261005-001"])
+    assert (await manager_client.post(URL, params=OCTOBER)).status_code == 202
+    await ai_on.pop()
+    september = {"date_from": "2026-09-01", "date_to": "2026-09-30"}
+    resp = await manager_client.post(URL, params=september)
+    assert resp.status_code == 409 and "Слишком часто" in resp.json()["detail"]
+    assert R.RUNNING_KEY not in redis.keys, "замок снят при отказе по интервалу"
+    assert (await manager_client.get(URL, params=september)).json()["next_run_at"] is not None
+
+
+@pytest.mark.parametrize("problems", [
+    {"daily_limit": 0}, {"daily_limit": 101}, {"min_interval_minutes": -1},
+    {"rerun_cooldown_minutes": 10081}, {"manual_enabled": "yes"}, {"unknown": 1},
+])
+def test_ai_problems_config_validation(problems):
+    from uk_management_bot.services.auto_manager.config import validate_config
+
+    with pytest.raises(ValueError, match="ai.problems"):
+        validate_config({"ai": {"problems": problems}})
 
 
 @pytest.mark.asyncio
@@ -455,6 +529,18 @@ async def test_monthly_without_model_answer_sends_only_csv(
     bot = FakeBot()
     await mr.send_monthly_report(bot, today=date(2026, 11, 1), session_factory=db_session_factory)
     assert len(bot.documents) == 2 and bot.messages == []
+
+
+@pytest.mark.asyncio
+async def test_monthly_switched_off_in_ai_rules(
+        db_session, db_session_factory, seeded, redis, llm, monkeypatch):
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    await set_limits(db_session, monthly_enabled=False)
+    await _managers(db_session)
+    llm.answer = llm_answer(["261005-001"])
+    bot = FakeBot()
+    await mr.send_monthly_report(bot, today=date(2026, 11, 1), session_factory=db_session_factory)
+    assert len(bot.documents) == 2 and llm.calls == [] and bot.messages == []
 
 
 def test_problems_message_fits_telegram_limit():
