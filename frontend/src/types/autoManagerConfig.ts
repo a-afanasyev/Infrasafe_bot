@@ -44,6 +44,22 @@ export interface AutoManagerAiConfig {
   extra_emergency_keywords: string[]
   /** Только переопределения; стандартные тексты — в `template_defaults` ответа. */
   templates: Partial<Record<AiTemplateKey, AiTemplateOverride>>
+  /** ИИ-разбор «Топ-10 проблем»: выключатели и ограничения запусков. */
+  problems: AiProblemsConfig
+}
+
+/** Блок `ai.problems` (диапазоны проверяет сервер, `_PROBLEMS_RANGES`). */
+export interface AiProblemsConfig {
+  /** Кнопка «Найти проблемы» в аналитике. */
+  manual_enabled: boolean
+  /** Разбор прошлого месяца в ежемесячном отчёте бота. */
+  monthly_enabled: boolean
+  /** Тот же период повторно — не раньше, чем через N минут (0..10080). */
+  rerun_cooldown_minutes: number
+  /** Между любыми запусками на площадке (0..1440). */
+  min_interval_minutes: number
+  /** Запусков по кнопке в сутки (1..100). */
+  daily_limit: number
 }
 
 export type LadderStep = 'remind_executor' | 'staff_group' | 'manager' | 'reassign'

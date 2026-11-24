@@ -66,6 +66,58 @@ describe('authStore.bootstrap — shared-cookie session recovery', () => {
   })
 })
 
+// Вкладка, восстановленная из sessionStorage, показывается сразу, а роли/права
+// освежаются в фоне: иначе новое действие RBAC после выкатки (или смена прав в
+// «Роли и права») не доходило до вкладки, открытой раньше, — F5 не помогал.
+describe('authStore.bootstrap — фоновое обновление прав', () => {
+  const stale = { id: 1, roles: ['manager'], actions: ['requests.stats'] }
+
+  it('права из профиля приходят в уже открытую вкладку, не задерживая показ', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    server.use(http.get('*/api/v2/profile', async () => {
+      await gate
+      return HttpResponse.json({ ...stale, actions: ['requests.stats', 'requests.problems'] })
+    }))
+    useAuthStore.setState({ user: stale, isAuthenticated: true, hydrating: true })
+    await useAuthStore.getState().bootstrap()
+    expect(useAuthStore.getState().hydrating).toBe(false)   // не ждали сеть
+    expect(useAuthStore.getState().user?.actions).toEqual(['requests.stats'])
+    release()
+    await vi.waitFor(() =>
+      expect(useAuthStore.getState().user?.actions).toEqual(['requests.stats', 'requests.problems']))
+  })
+
+  it('401 в фоне не разлогинивает и не дёргает refresh', async () => {
+    let refreshCalls = 0
+    let profileCalls = 0
+    server.use(
+      http.get('*/api/v2/profile', () => { profileCalls += 1; return new HttpResponse(null, { status: 401 }) }),
+      http.post('*/api/v2/auth/refresh', () => { refreshCalls += 1; return HttpResponse.json({ ok: true }) }),
+    )
+    useAuthStore.setState({ user: stale, isAuthenticated: true, hydrating: true })
+    await useAuthStore.getState().bootstrap()
+    await vi.waitFor(() => expect(profileCalls).toBe(1))
+    expect(refreshCalls).toBe(0)
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: true, user: stale })
+  })
+
+  it('выход во время фонового запроса — сессия не воскресает', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    server.use(
+      http.get('*/api/v2/profile', async () => { await gate; return HttpResponse.json(stale) }),
+      http.post('*/api/v2/auth/logout', () => HttpResponse.json({ ok: true })),
+    )
+    useAuthStore.setState({ user: stale, isAuthenticated: true, hydrating: true })
+    await useAuthStore.getState().bootstrap()
+    await useAuthStore.getState().logout()
+    release()
+    await new Promise(r => setTimeout(r, 20))
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, user: null })
+  })
+})
+
 // A9-P2-29: следующий пользователь в той же вкладке не должен видеть кэш
 // предыдущего (канбан, ПДн жителей, media-blob) — logout/login чистят QueryClient.
 describe('authStore — изоляция кэша QueryClient между пользователями', () => {

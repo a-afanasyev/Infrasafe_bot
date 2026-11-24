@@ -56,6 +56,8 @@
 
 Блок `sla` дополнен `ladder_enabled` (четыре bool по ступеням `executor`-трека; выключенная ступень считается пройденной — пинг не уходит, `result="disabled"`, следующая срабатывает по своему смещению) и `public_status` (`enabled`, `min_urgency ∈ {critical, high}`).
 
+- `problems` — ИИ-разбор «Топ-10 проблем» аналитики: `manual_enabled`, `monthly_enabled`, `rerun_cooldown_minutes`, `min_interval_minutes`, `daily_limit` (диапазоны в `_PROBLEMS_RANGES`; блок «ИИ-разбор проблем» на странице). Детали → `ANALYTICS.md` §4b.
+
 **Страница «Правила ИИ»** (`/dashboard/ai-manager`, право `auto_manager.configure`) редактирует всё перечисленное через тот же `GET/PUT /api/v2/auto-manager-config`. Модели API разделены: `AutoManagerConfigData` — тело PUT (только хранимые поля, лишние отбрасываются), `AutoManagerConfigOut` — ответ с read-only `ai_available`, `ai_status` (предохранитель: `open`, `open_ttl`, `failures`; `null` без флага или без Redis), `template_defaults`, `base_emergency_keywords`. `POST /api/v2/auto-manager-config/ai-breaker/reset` снимает предохранитель досрочно и пишет `audit_logs` `ai_breaker_reset` (`user_id`, `details.before`, `details.at`); Redis недоступен — 503.
 
 Env: `AI_MANAGER_MODEL=claude-sonnet-5-5`, `AI_MANAGER_EFFORT=low`, `AI_MANAGER_LLM_TIMEOUT=8`, общий `ANTHROPIC_API_KEY` с Group Intake (Doppler). Haiku 5.5 — переключение через `AI_MANAGER_MODEL`, промпт и схема те же.

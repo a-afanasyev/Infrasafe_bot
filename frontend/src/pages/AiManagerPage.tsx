@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AiBreakerBanner from '../components/aiManager/AiBreakerBanner'
 import AiTemplatesEditor from '../components/aiManager/AiTemplatesEditor'
 import AiTriageForm from '../components/aiManager/AiTriageForm'
+import AiProblemsForm from '../components/aiManager/AiProblemsForm'
 import SlaEditor from '../components/shifts/AutoManagerSlaEditor'
 import type { AutoManagerConfigOut } from '../types/autoManagerConfig'
 
@@ -52,6 +53,9 @@ export default function AiManagerPage() {
   // (тот же приём, что в AutoManagerSlaEditor): 30-секундный опрос не стирает ввод.
   const [seededFrom, setSeededFrom] = useState<AutoManagerConfigOut | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  // Невалидный ввод в блоке ИИ-разбора: значение не в черновике — сохранять нельзя,
+  // иначе молча ушло бы прежнее число вместо видимого в поле.
+  const [problemsValid, setProblemsValid] = useState(true)
   if (data && data !== seededFrom) {
     const untouched = seededFrom === null || draft === null
       || JSON.stringify(draft) === JSON.stringify(toDraft(seededFrom))
@@ -121,6 +125,12 @@ export default function AiManagerPage() {
           onChange={(ai) => setDraft({ ...draft, ai })} />
       </section>
 
+      <section className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-3">
+        <span className="text-[13px] font-semibold text-text-primary">{t('aiManager.problems.title')}</span>
+        <AiProblemsForm value={draft.ai.problems} onValidityChange={setProblemsValid}
+          onChange={(problems) => setDraft({ ...draft, ai: { ...draft.ai, problems } })} />
+      </section>
+
       <section className="bg-bg-card border border-border-default rounded-default p-5">
         <SlaEditor value={draft.sla} onChange={(sla) => setDraft({ ...draft, sla })} />
       </section>
@@ -131,7 +141,7 @@ export default function AiManagerPage() {
       </section>
 
       <div>
-        <Button disabled={!dirty || updateConfig.isPending} onClick={save}>
+        <Button disabled={!dirty || !problemsValid || updateConfig.isPending} onClick={save}>
           {t('aiManager.save')}
         </Button>
       </div>
