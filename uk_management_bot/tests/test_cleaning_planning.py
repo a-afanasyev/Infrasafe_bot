@@ -70,6 +70,19 @@ def test_parking_exit_stays_a_point_work_with_own_days():
     assert (task.works, task.slots) == (("parking",), ("point:parking",))
 
 
+def test_fire_stairs_is_a_point_work_with_own_days():
+    items = parse_items([
+        {"work_kind": "wet", "weekdays": [MON]},
+        {"work_kind": "fire_stairs", "weekdays": [THU], "entrances": [1]},
+    ], floor_count=2, entrance_count=2)
+    assert task_for(items, (), entrance=2, weekday=THU) is None
+    task = task_for(items, (), entrance=1, weekday=THU)
+    assert (task.works, task.slots) == (("fire_stairs",), ("point:fire_stairs",))
+    with pytest.raises(PlanError):
+        parse_items([{"work_kind": "fire_stairs", "weekdays": [MON], "floor_from": 1, "floor_to": 2}],
+                    floor_count=2, entrance_count=1)
+
+
 def test_entrance_without_elevator_work_gets_only_floors():
     task = task_for(_items(), (), entrance=2, weekday=MON)
     assert task.works == ("wet",)
