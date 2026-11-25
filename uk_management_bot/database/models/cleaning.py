@@ -83,13 +83,15 @@ class CleaningAssignment(Base):
 
 
 class CleaningBuildingSettings(Base):
-    """Живые настройки показа жителям; на задания не влияют."""
+    """Живые настройки дома: показ жителям и площади для нагрузки; на задания не влияют."""
 
     __tablename__ = "cleaning_building_settings"
 
     building_id = Column(Integer, ForeignKey("buildings.id"), primary_key=True)
     show_to_residents = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     show_photos = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # Площади мест общего пользования по подъездам (services/cleaning/areas.py); NULL — не заданы.
+    areas = Column(_json(), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 

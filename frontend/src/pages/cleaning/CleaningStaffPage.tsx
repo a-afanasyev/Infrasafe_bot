@@ -21,7 +21,8 @@ import type { CleaningBuilding, CleaningStaffMember } from '../../types/cleaning
 /**
  * Уборщицы, дома и нагрузка (/dashboard/cleaning/staff, manager). У подъезда
  * один ответственный; привязка дома назначает все его подъезды и действует с
- * завтра. Нагрузка — этажи по плану на каждый день недели против нормы.
+ * завтра. Нагрузка — этажи и м² мест общего пользования по плану на каждый день
+ * недели; перегрузка по м², если задана норма м², иначе по этажам.
  */
 const CARD = 'bg-bg-card border border-border-default rounded-default p-4 flex flex-col gap-3'
 const FIELD = 'h-9 rounded-default border border-border-default bg-bg-card px-2 text-[13px] text-text-primary'
@@ -35,20 +36,28 @@ function byBuilding(member: CleaningStaffMember): Map<number, number[]> {
   return groups
 }
 
-function NormForm({ norm }: { norm: number }) {
+interface NormFormProps {
+  norm: number
+  ruleKey: 'floors_norm_per_day' | 'area_norm_m2_per_day'
+  max: number
+  label: string
+}
+
+function NormForm({ norm, ruleKey, max, label }: NormFormProps) {
   const { t } = useTranslation()
   const [value, setValue] = useState(String(norm))
   const save = useSaveCleaningRules()
   const parsed = Number(value)
-  const valid = Number.isInteger(parsed) && parsed >= 0 && parsed <= 1000
+  const valid = Number.isInteger(parsed) && parsed >= 0 && parsed <= max
+  const id = `cleaning-norm-${ruleKey}`
   return (
     <form
       className="flex items-end gap-2"
-      onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate({ floors_norm_per_day: parsed }) }}
+      onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate({ [ruleKey]: parsed }) }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="cleaning-norm">{t('cleaning.staff.norm')}</Label>
-        <Input id="cleaning-norm" type="number" min={0} max={1000} className="w-32" value={value} onChange={(e) => setValue(e.target.value)} />
+        <Label htmlFor={id}>{label}</Label>
+        <Input id={id} type="number" min={0} max={max} className="w-32" value={value} onChange={(e) => setValue(e.target.value)} />
       </div>
       <Button type="submit" variant="outline" disabled={!valid || parsed === norm || save.isPending}>{t('cleaning.staff.saveNorm')}</Button>
     </form>
@@ -70,7 +79,8 @@ export default function CleaningStaffPage() {
     return <div className="p-6"><p className="text-[13px] text-red">{t('common.error')}</p></div>
   }
 
-  const { cleaners, norm, unassigned } = staff.data
+  const { cleaners, norm, area_norm: areaNorm, unassigned } = staff.data
+  const byArea = areaNorm > 0
   const address = new Map<number, CleaningBuilding>(buildings.data.map((b) => [b.id, b]))
   const nameOf = (member: CleaningStaffMember) => person.full(member, `#${member.user_id}`)
   /** Привязать дом (или подъезды из поля) уборщице; чужие подъезды — только после подтверждения. */
@@ -98,12 +108,19 @@ export default function CleaningStaffPage() {
           <h1 className="text-[18px] font-semibold text-text-primary">{t('cleaning.staff.title')}</h1>
           <p className="text-[13px] text-text-muted">{t('cleaning.staff.subtitle')}</p>
         </div>
-        <NormForm key={norm} norm={norm} />
+        <div className="flex flex-wrap items-end gap-4">
+          <NormForm key={`f${norm}`} norm={norm} ruleKey="floors_norm_per_day" max={1000} label={t('cleaning.staff.norm')} />
+          <NormForm
+            key={`m${areaNorm}`} norm={areaNorm} ruleKey="area_norm_m2_per_day" max={100000} label={t('cleaning.staff.normM2')}
+          />
+        </div>
       </div>
 
       {cleaners.filter((c) => c.overloaded).map((c) => (
         <p key={c.user_id} role="alert" className="rounded-default border border-red p-3 text-[13px] font-semibold text-red">
-          {t('cleaning.staff.overload', { name: nameOf(c), peak: c.peak, norm })}
+          {byArea
+            ? t('cleaning.staff.overloadM2', { name: nameOf(c), peak: c.m2_peak, norm: areaNorm })
+            : t('cleaning.staff.overload', { name: nameOf(c), peak: c.peak, norm })}
         </p>
       ))}
       {unassigned.length > 0 && (
@@ -123,7 +140,8 @@ export default function CleaningStaffPage() {
                 <th className="p-2 font-medium">{t('cleaning.staff.col.buildings')}</th>
                 <th className="p-2 font-medium">{t('cleaning.staff.col.week')}</th>
                 <th className="p-2 font-medium">{t('cleaning.staff.col.peak')}</th>
-                <th className="p-2 font-medium">{t('cleaning.staff.col.percent')}</th>
+                <th className="p-2 font-medium">{t('cleaning.staff.col.peakM2')}</th>
+                <th className="p-2 font-medium">{t(byArea ? 'cleaning.staff.col.percentM2' : 'cleaning.staff.col.percent')}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,9 +184,19 @@ export default function CleaningStaffPage() {
                     </div>
                   </td>
                   <td className="p-2">{member.week}</td>
-                  <td className={cn('p-2', member.overloaded && 'font-semibold text-red')}>{member.peak}</td>
+                  <td className={cn('p-2', !byArea && member.overloaded && 'font-semibold text-red')}>{member.peak}</td>
+                  <td className="p-2">
+                    <span className={cn(byArea && member.overloaded && 'font-semibold text-red')}>{member.m2_peak || '—'}</span>
+                    {member.missing_areas.length > 0 && (
+                      <p className="text-[12px] text-amber">
+                        {t('cleaning.staff.missingAreas', {
+                          list: member.missing_areas.map((id) => address.get(id)?.address ?? `#${id}`).join(', '),
+                        })}
+                      </p>
+                    )}
+                  </td>
                   <td className={cn('p-2 font-semibold whitespace-nowrap', member.overloaded ? 'text-red' : 'text-green')}>
-                    {member.percent}% — {t(member.overloaded ? 'cleaning.staff.over' : 'cleaning.staff.ok')}
+                    {byArea ? member.m2_percent : member.percent}% — {t(member.overloaded ? 'cleaning.staff.over' : 'cleaning.staff.ok')}
                   </td>
                 </tr>
               ))}
@@ -192,9 +220,16 @@ export default function CleaningStaffPage() {
               {cleaners.filter((c) => c.week > 0).flatMap((member) => [
                 <tr key={member.user_id} className="border-t border-border-default font-semibold">
                   <td className="p-2">{nameOf(member)}</td>
-                  {member.by_weekday.map((n, i) => (
-                    <td key={i} className={cn('p-2', norm > 0 && n > norm && 'text-red')}>{n || '—'}</td>
-                  ))}
+                  {member.by_weekday.map((n, i) => {
+                    const m2 = member.m2_by_weekday[i]
+                    const over = byArea ? m2 > areaNorm : norm > 0 && n > norm
+                    return (
+                      <td key={i} className={cn('p-2', over && 'text-red')}>
+                        {n || '—'}
+                        {m2 > 0 && <span className="block text-[12px] font-normal">{t('cleaning.staff.m2', { n: m2 })}</span>}
+                      </td>
+                    )
+                  })}
                 </tr>,
                 ...Object.entries(member.buildings).map(([buildingId, days]) => (
                   <tr key={`${member.user_id}:${buildingId}`} className="text-text-muted">

@@ -22,14 +22,17 @@ const PLAN: CleaningPlanView = {
     items: [{ work_kind: 'wet', weekdays: [0, 3], floor_from: 1, floor_to: 5 }],
   },
 }
+const NO_M2 = { m2_by_weekday: [0, 0, 0, 0, 0, 0, 0], m2_peak: 0, m2_percent: 0, missing_areas: [] }
 const STAFF: CleaningStaff = {
   norm: 20,
+  area_norm: 0,
   unassigned: [{ building_id: 1, entrance: 3 }],
   cleaners: [
     { user_id: 11, first_name: 'Дилноза', last_name: 'К', entrances: [{ building_id: 1, entrance: 1 }, { building_id: 1, entrance: 2 }],
-      by_weekday: [27, 0, 0, 27, 0, 0, 0], buildings: { 1: [27, 0, 0, 27, 0, 0, 0] }, week: 54, peak: 27, percent: 135, overloaded: true },
+      by_weekday: [27, 0, 0, 27, 0, 0, 0], buildings: { 1: [27, 0, 0, 27, 0, 0, 0] }, week: 54, peak: 27, percent: 135,
+      overloaded: true, ...NO_M2, missing_areas: [1] },
     { user_id: 12, first_name: 'Зухра', last_name: 'Т', entrances: [], by_weekday: [0, 0, 0, 0, 0, 0, 0], buildings: {},
-      week: 0, peak: 0, percent: 0, overloaded: false },
+      week: 0, peak: 0, percent: 0, overloaded: false, ...NO_M2 },
   ],
 }
 
@@ -39,6 +42,8 @@ beforeEach(() => {
     http.get('*/api/v2/cleaning/buildings', () => HttpResponse.json({ buildings: [BUILDING] })),
     http.get('*/api/v2/cleaning/buildings/1/plan', () => HttpResponse.json(PLAN)),
     http.get('*/api/v2/cleaning/staff', () => HttpResponse.json(STAFF)),
+    http.get('*/api/v2/cleaning/buildings/1/areas', () =>
+      HttpResponse.json({ building_id: 1, floor_count: 9, entrance_count: 3, areas: null })),
   )
 })
 
@@ -70,6 +75,38 @@ describe('CleaningPlanPage', () => {
     await user.click(screen.getByRole('button', { name: 'Чт, строка 1' }))
     expect(screen.getByRole('button', { name: 'Сохранить план' })).toBeDisabled()
     expect(screen.getByText('У каждой работы должен быть хотя бы один день.')).toBeInTheDocument()
+  })
+
+  it('сохраняет площади дома и подъезда с отличиями', async () => {
+    let body: unknown = null
+    server.use(http.put('*/api/v2/cleaning/buildings/1/areas', async ({ request }) => {
+      body = await request.json()
+      return HttpResponse.json({ building_id: 1, floor_count: 9, entrance_count: 3, ...(body as object) })
+    }))
+    const user = userEvent.setup()
+    render(<CleaningPlanPage />)
+
+    await user.type(await screen.findByLabelText('Все подъезды: Типовой этаж'), '20,5')
+    await user.type(screen.getByLabelText('Все подъезды: 1-й этаж'), '60')
+    await user.type(screen.getByLabelText('Все подъезды: Пожарная лестница'), '36')
+    await user.selectOptions(screen.getByLabelText('Подъезд с отличиями…'), '3')
+    await user.click(screen.getByRole('button', { name: 'Добавить' }))
+    await user.type(screen.getByLabelText('Подъезд 3: Типовой этаж'), '30')
+    await user.click(screen.getByRole('button', { name: 'Сохранить площади' }))
+
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(body).toEqual({ areas: { entrances: {
+      '*': { typical: 20.5, floors: { '1': 60 }, points: { fire_stairs: 36 } },
+      '3': { typical: 30 },
+    } } })
+  })
+
+  it('не даёт сохранить неверные особые этажи', async () => {
+    const user = userEvent.setup()
+    render(<CleaningPlanPage />)
+    await user.type(await screen.findByLabelText('Все подъезды: Особые этажи'), '16=31')
+    expect(screen.getByRole('button', { name: 'Сохранить площади' })).toBeDisabled()
+    expect(screen.getByText(/Особые этажи — «этаж:м²»/)).toBeInTheDocument()
   })
 })
 
@@ -109,5 +146,19 @@ describe('CleaningStaffPage', () => {
     await waitFor(() => expect(body).not.toBeNull())
     expect(body).toEqual({ building_id: 1, entrances: [3], user_id: 12 })
     confirm.mockRestore()
+  })
+
+  it('при норме м² считает перегруз по м² и помечает дома без площадей', async () => {
+    const m2Staff: CleaningStaff = {
+      ...STAFF, area_norm: 400,
+      cleaners: [{ ...STAFF.cleaners[0], m2_by_weekday: [520, 0, 0, 520, 0, 0, 0], m2_peak: 520, m2_percent: 130 }, STAFF.cleaners[1]],
+    }
+    server.use(http.get('*/api/v2/cleaning/staff', () => HttpResponse.json(m2Staff)))
+    render(<CleaningStaffPage />)
+
+    expect(await screen.findByText(/Перегруз: Дилноза К — 520 м² в день при норме 400 м²/)).toBeInTheDocument()
+    const row = screen.getByText('130% — перегруз').closest('tr') as HTMLElement
+    expect(within(row).getByText('нет площадей: д. 12')).toBeInTheDocument()
+    expect(screen.getAllByText('520 м²')).toHaveLength(2)
   })
 })
