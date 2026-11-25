@@ -235,7 +235,8 @@ async def test_closed_day_is_not_reopened(db):
 
     await rules.save(db, {"day_end_time": "18:00"}, actor_id=None, now=business_wall_clock(TUE, 16))
 
-    assert day.closed_at == closed_at and as_utc(day.day_end_at) == business_wall_clock(TUE, 15)
+    assert as_utc(day.closed_at) == as_utc(closed_at)
+    assert as_utc(day.day_end_at) == business_wall_clock(TUE, 15)
     assert await rules.today_end_at(db, now=business_wall_clock(TUE, 16)) is None
 
 
@@ -254,3 +255,18 @@ async def test_saving_unchanged_settings_creates_no_version(db):
 
     assert again.version == first.version
     assert len((await db.execute(select(CleaningRules))).scalars().all()) == 1
+
+
+async def test_resaving_the_same_time_still_extends_a_day_created_from_older_rules(db):
+    """Настройка сохранена до создания сегодняшнего дня: день создан по прежней
+    версии (15:00), в настройках уже 18:00. Повторное «Сохранить» с тем же
+    временем версию не создаёт, но день продлить обязано."""
+    day = await _open_day(db, "15:00")
+    db.add(CleaningRules(data={"day_end_time": "18:00"}, created_at=_noon(TUE)))
+    await db.flush()
+
+    saved = await rules.save(db, {"day_end_time": "18:00"}, actor_id=7, now=_noon(TUE))
+
+    assert as_utc(day.day_end_at) == business_wall_clock(TUE, 18)
+    assert len((await db.execute(select(CleaningRules))).scalars().all()) == 2, "новой версии быть не должно"
+    assert saved.data["day_end_time"] == "18:00"
