@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { formatTime } from '../../utils/timezone'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { usePersonName } from '../../hooks/usePersonName'
 import {
@@ -70,7 +71,13 @@ function RulesForm({ rules }: { rules: CleaningRules }) {
       </label>
       <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-4">
         <Button type="submit" variant="outline" disabled={!valid || save.isPending}>{t('cleaning.rules.save')}</Button>
-        <p className="text-[12px] text-text-muted">{t('cleaning.rules.effective')}</p>
+        {/* Настройки действуют с завтра, кроме продления конца дня — поэтому показываем
+            не обещание, а факт: до какого времени фото принимаются СЕГОДНЯ. */}
+        <p className="text-[12px] text-text-muted">
+          {rules.today_end_at
+            ? t('cleaning.rules.todayUntil', { time: formatTime(rules.today_end_at) })
+            : t('cleaning.rules.effective')}
+        </p>
       </div>
     </form>
   )

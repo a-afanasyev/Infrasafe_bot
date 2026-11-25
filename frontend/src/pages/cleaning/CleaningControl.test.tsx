@@ -45,7 +45,8 @@ beforeEach(() => {
       { user_id: 11, first_name: 'Дилноза', last_name: 'К', planned: 20, accepted: 18, rejected: 1, expired: 1, missed: 0, complaints: 2, confirmed: 1, percent: 90 },
     ] })),
     http.get('*/api/v2/cleaning/rules', () => HttpResponse.json({ version: 3, data: {
-      day_end_time: '20:00', sample_every: 10, session_ttl_minutes: 120, allow_deferred_auto: false } })),
+      day_end_time: '20:00', sample_every: 10, session_ttl_minutes: 120, allow_deferred_auto: false },
+      today_end_at: '2026-11-17T10:00:00Z' })),
     http.get('*/api/v2/cleaning/control/tasks/2', () => HttpResponse.json(CARD)),
     http.get('*/api/v2/cleaning/staff', () => HttpResponse.json({ norm: 40, cleaners: [], unassigned: [] })),
   )
@@ -91,6 +92,8 @@ describe('CleaningControlPage', () => {
     await waitFor(() => expect(complaintBody).toEqual({ outcome: 'confirmed' }))
 
     const dayEnd = await screen.findByLabelText('Конец дня уборки')
+    // настройка «20:00» действует с завтра, а сегодня день идёт до 15:00 — менеджер видит факт
+    expect(screen.getByText(/Сегодня фото принимаются до 15:00/)).toBeInTheDocument()
     expect(dayEnd).toHaveValue('20:00')
     await user.clear(dayEnd)
     await user.type(dayEnd, '21:30')

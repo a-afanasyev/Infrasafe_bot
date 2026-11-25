@@ -103,6 +103,7 @@ async def test_building_settings(client, seeded):
 async def test_rules_are_versioned_and_validated(client, seeded, db_session):
     first = (await client.get(f"{BASE}/rules")).json()
     assert first["version"] is None and first["data"]["day_end_time"] == "23:59"
+    assert first["today_end_at"] is None  # сегодняшний день в тесте не создан
 
     saved = await client.put(f"{BASE}/rules", json={"day_end_time": "20:00", "floors_norm_per_day": 30})
     assert saved.status_code == 200, saved.text

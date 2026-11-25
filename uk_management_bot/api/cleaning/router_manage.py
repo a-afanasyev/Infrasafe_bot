@@ -185,16 +185,22 @@ async def staff(db: AsyncSession = Depends(get_db), user: User = Depends(_read))
 @router.get("/rules", response_model=CleaningRulesOut)
 async def get_rules(db: AsyncSession = Depends(get_db), user: User = Depends(_read)):
     current = await rules.latest(db)
-    return CleaningRulesOut(version=current.version, data=dict(current.data))
+    return CleaningRulesOut(version=current.version, data=dict(current.data),
+                            today_end_at=await rules.today_end_at(db))
 
 
 @router.put("/rules", response_model=CleaningRulesOut)
 async def put_rules(patch: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db),
                     user: User = Depends(_manage)):
-    """Частичная правка настроек; новая версия действует с завтрашней бизнес-даты."""
+    """Частичная правка настроек; новая версия действует с завтрашней бизнес-даты.
+
+    Более поздний конец дня применяется и к идущему дню — ``today_end_at`` в
+    ответе показывает, до какого времени фото принимаются сегодня.
+    """
     try:
         saved = await rules.save(db, patch, actor_id=user.id)
     except rules.RulesError as exc:
         raise HTTPException(status_code=422, detail=f"bad_rule:{exc.key}") from None
+    today_end = await rules.today_end_at(db)
     await db.commit()
-    return CleaningRulesOut(version=saved.version, data=dict(saved.data))
+    return CleaningRulesOut(version=saved.version, data=dict(saved.data), today_end_at=today_end)

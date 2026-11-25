@@ -3235,6 +3235,18 @@
             "title": "Data",
             "type": "object"
           },
+          "today_end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today End At"
+          },
           "version": {
             "anyOf": [
               {
@@ -20468,7 +20480,7 @@
         ]
       },
       "put": {
-        "description": "Частичная правка настроек; новая версия действует с завтрашней бизнес-даты.",
+        "description": "Частичная правка настроек; новая версия действует с завтрашней бизнес-даты.\n\nБолее поздний конец дня применяется и к идущему дню — ``today_end_at`` в\nответе показывает, до какого времени фото принимаются сегодня.",
         "operationId": "put_rules_api_v2_cleaning_rules_put",
         "requestBody": {
           "content": {

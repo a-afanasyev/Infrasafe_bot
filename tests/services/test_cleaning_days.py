@@ -12,9 +12,10 @@ from uk_management_bot.database.models.cleaning import (
     CleaningTask,
     CleaningTaskEvent,
 )
-from uk_management_bot.services.cleaning import days
+from uk_management_bot.services.cleaning import days, rules
 from uk_management_bot.services.cleaning.transitions import TransitionError, move
 from uk_management_bot.utils.business_time import business_wall_clock
+from uk_management_bot.utils.datetime_utils import as_utc
 
 TUE = date(2026, 11, 17)  # вторник
 WET_1_5 = {"work_kind": "wet", "weekdays": [0, 3], "floor_from": 1, "floor_to": 5}
@@ -192,3 +193,64 @@ async def test_generated_task_asks_three_points_for_first_floor(el_async_factory
         await days.ensure_tasks(db, day, now=business_wall_clock(day, 12))
         task = (await db.execute(select(CleaningTask))).scalar_one()
     assert task.slots_required == ["point:entry1", "point:entry2", "point:lift_hall", "floor:2", "floor:3"]
+
+
+# ── конец дня: продление в тот же день ───────────────────────────────────────
+# Живой случай profk 2026-11-23: конец дня стоял 15:00, менеджер утром поставил
+# 18:00 — настройка «действует с завтра», день закрылся в 15:00 и 34 подъезда
+# остались замороженными до полуночи. Продление теперь применяется сразу.
+
+async def _open_day(db, end_time: str) -> CleaningDay:
+    db.add(CleaningRules(data={"day_end_time": end_time}, created_at=_noon(TUE - timedelta(days=2))))
+    await db.flush()
+    await days.ensure_tasks(db, TUE, now=_noon(TUE))
+    return await db.get(CleaningDay, TUE)
+
+
+async def test_later_end_time_extends_the_open_day_at_once(db):
+    day = await _open_day(db, "15:00")
+    day.reminded_at = _noon(TUE)
+
+    await rules.save(db, {"day_end_time": "18:00"}, actor_id=None, now=_noon(TUE))
+
+    assert as_utc(day.day_end_at) == business_wall_clock(TUE, 18)
+    # уборщицам уже сказали «до 15:00» — напоминание должно уйти заново, с новым временем
+    assert day.reminded_at is None
+    await days.close_days(db, now=business_wall_clock(TUE, 15, 30))
+    assert day.closed_at is None, "день не должен закрыться по старому времени"
+
+
+async def test_earlier_end_time_never_shortens_the_running_day(db):
+    day = await _open_day(db, "19:00")
+
+    await rules.save(db, {"day_end_time": "15:00"}, actor_id=None, now=_noon(TUE))
+
+    assert as_utc(day.day_end_at) == business_wall_clock(TUE, 19)
+
+
+async def test_closed_day_is_not_reopened(db):
+    day = await _open_day(db, "15:00")
+    await days.close_days(db, now=business_wall_clock(TUE, 15, 30))
+    closed_at = day.closed_at
+
+    await rules.save(db, {"day_end_time": "18:00"}, actor_id=None, now=business_wall_clock(TUE, 16))
+
+    assert day.closed_at == closed_at and as_utc(day.day_end_at) == business_wall_clock(TUE, 15)
+    assert await rules.today_end_at(db, now=business_wall_clock(TUE, 16)) is None
+
+
+async def test_other_settings_do_not_touch_todays_end(db):
+    day = await _open_day(db, "15:00")
+
+    await rules.save(db, {"sample_every": 5}, actor_id=None, now=_noon(TUE))
+
+    assert as_utc(day.day_end_at) == business_wall_clock(TUE, 15)
+    assert await rules.today_end_at(db, now=_noon(TUE)) == business_wall_clock(TUE, 15)
+
+
+async def test_saving_unchanged_settings_creates_no_version(db):
+    first = await rules.save(db, {"day_end_time": "18:00"}, actor_id=None, now=_noon(TUE))
+    again = await rules.save(db, {"day_end_time": "18:00"}, actor_id=None, now=_noon(TUE))
+
+    assert again.version == first.version
+    assert len((await db.execute(select(CleaningRules))).scalars().all()) == 1

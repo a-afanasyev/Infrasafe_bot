@@ -72,6 +72,8 @@ export interface CleaningStaff {
 export interface CleaningRules {
   version: number | null
   data: Record<string, string | number | boolean>
+  /** До какого момента фото принимаются сегодня; null — день не создан или уже закрыт. */
+  today_end_at?: string | null
 }
 
 // ── контроль ────────────────────────────────────────────────────────────────

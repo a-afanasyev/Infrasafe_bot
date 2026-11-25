@@ -1,7 +1,7 @@
 """Схемы API менеджера модуля «Уборка»."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -94,3 +94,7 @@ class CleaningStaffOut(BaseModel):
 class CleaningRulesOut(BaseModel):
     version: Optional[int]
     data: dict[str, Any]
+    # До какого момента фото принимаются СЕГОДНЯ. Может отличаться от
+    # ``data.day_end_time``: настройки действуют с завтра, кроме продления
+    # конца дня. None — сегодняшний день не создан или уже закрыт.
+    today_end_at: Optional[datetime] = None
