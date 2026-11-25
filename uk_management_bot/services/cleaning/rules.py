@@ -35,6 +35,7 @@ DEFAULTS: Mapping[str, Any] = MappingProxyType({
     "allow_deferred_auto": False,     # допускать ли `deferred` к автоприёмке
     "backfill_days": 3,               # глубина догенерации пропущенных дней
     "floors_norm_per_day": 40,        # норма нагрузки на уборщицу
+    "area_norm_m2_per_day": 0,        # норма в м² мест общего пользования (0 — перегрузка по этажам)
     "sample_every": 10,               # выборочный контроль: 1 из N автопринятых
     "probation_days": 14,             # первые дни новой уборщицы — всё на проверку
     "superseded_retention_days": 7,   # хранение заменённых фото
@@ -78,7 +79,7 @@ _TIME_RE = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
 # Верхние границы числовых настроек (нижняя у всех — 0).
 _INT_MAX = {
     "close_grace_minutes": 120, "late_window_hours": 72, "session_ttl_minutes": 720, "backfill_days": 14,
-    "floors_norm_per_day": 1000, "sample_every": 1000, "probation_days": 365,
+    "floors_norm_per_day": 1000, "area_norm_m2_per_day": 100000, "sample_every": 1000, "probation_days": 365,
     "superseded_retention_days": 365, "reminder_hours_before_end": 12,
     "similar_days": 365, "similar_distance": 16, "min_seconds_per_floor": 3600,
 }

@@ -1,7 +1,7 @@
 """API менеджера модуля «Уборка»: план дома, привязка, нагрузка, настройки, выключатель."""
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building
@@ -99,6 +99,54 @@ async def test_building_settings(client, seeded):
     assert (building["show_to_residents"], building["show_photos"]) == (True, False)
 
 
+AREAS = {"entrances": {"*": {"typical": 20, "floors": {"1": 60}}, "3": {"typical": 30}}}
+
+
+@pytest.mark.asyncio
+async def test_building_areas_roundtrip_and_validation(client, seeded, db_session):
+    empty = (await client.get(f"{BASE}/buildings/1/areas")).json()
+    assert empty == {"building_id": 1, "floor_count": 9, "entrance_count": 3, "areas": None}
+
+    saved = await client.put(f"{BASE}/buildings/1/areas", json={"areas": AREAS})
+    assert saved.status_code == 200, saved.text
+    assert (await client.get(f"{BASE}/buildings/1/areas")).json()["areas"] == AREAS
+
+    for bad, code in (({"entrances": {"4": {"typical": 1}}}, "bad_area_entrance"),
+                      ({"entrances": {"*": {"floors": {"10": 1}}}}, "bad_area_floor"),
+                      ({"entrances": {"*": {"floors": {"01": 1}}}}, "bad_area_floor"),
+                      ({"entrances": {"*": {"typical": -5}}}, "bad_area"),
+                      ({"entrances": {"*": {"points": {"wet": 1}}}}, "bad_area_point")):
+        resp = await client.put(f"{BASE}/buildings/1/areas", json={"areas": bad})
+        assert (resp.status_code, resp.json()["detail"]) == (422, code), bad
+
+    # показ жителям не затирает площади и наоборот
+    await client.put(f"{BASE}/buildings/1/settings", json={"show_to_residents": True, "show_photos": False})
+    assert (await client.get(f"{BASE}/buildings/1/areas")).json()["areas"] == AREAS
+    cleared = await client.put(f"{BASE}/buildings/1/areas", json={"areas": None})
+    assert cleared.status_code == 200 and (await client.get(f"{BASE}/buildings/1/areas")).json()["areas"] is None
+    stored = (await db_session.execute(text("SELECT areas IS NULL FROM cleaning_building_settings"))).scalar_one()
+    assert stored in (True, 1)  # SQL NULL, не JSON null
+    assert (await client.get(f"{BASE}/buildings")).json()["buildings"][0]["show_to_residents"] is True
+    assert (await client.get(f"{BASE}/buildings/77/areas")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_staff_load_in_m2(client, seeded):
+    await client.put(f"{BASE}/buildings/1/plan", json={"items": WET, "extra_points": []})
+    await client.put(f"{BASE}/assignments", json={"building_id": 1, "entrances": [1, 3], "user_id": CLEANER})
+    before = (await client.get(f"{BASE}/staff")).json()
+    assert before["area_norm"] == 0 and before["cleaners"][0]["missing_areas"] == [1]
+
+    await client.put(f"{BASE}/buildings/1/areas", json={"areas": AREAS})
+    await client.put(f"{BASE}/rules", json={"area_norm_m2_per_day": 400})
+    staff = (await client.get(f"{BASE}/staff")).json()
+    (cleaner,) = staff["cleaners"]
+    day = (60 + 20 * 8) + (60 + 30 * 8)
+    assert staff["area_norm"] == 400 and cleaner["missing_areas"] == []
+    assert cleaner["m2_by_weekday"] == [day, 0, day, 0, day, 0, 0]
+    assert (cleaner["m2_peak"], cleaner["m2_percent"], cleaner["overloaded"]) == (520, 130, True)
+
+
 @pytest.mark.asyncio
 async def test_rules_are_versioned_and_validated(client, seeded, db_session):
     first = (await client.get(f"{BASE}/rules")).json()
@@ -125,6 +173,7 @@ async def test_disabled_module_answers_404_everywhere(client, seeded, monkeypatc
              ("GET", "/rules", None), ("PUT", "/rules", {"sample_every": 5}),
              ("PUT", "/buildings/1/plan", {"items": WET, "extra_points": []}),
              ("PUT", "/buildings/1/settings", {"show_to_residents": True, "show_photos": True}),
+             ("GET", "/buildings/1/areas", None), ("PUT", "/buildings/1/areas", {"areas": None}),
              ("PUT", "/assignments", {"building_id": 1, "entrances": None, "user_id": CLEANER})]
     for method, path, body in calls:
         resp = await client.request(method, BASE + path, json=body)

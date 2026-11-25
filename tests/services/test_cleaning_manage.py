@@ -4,7 +4,11 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
-from uk_management_bot.database.models.cleaning import CleaningAssignment, CleaningPlanVersion
+from uk_management_bot.database.models.cleaning import (
+    CleaningAssignment,
+    CleaningBuildingSettings,
+    CleaningPlanVersion,
+)
 from uk_management_bot.services.cleaning import assignments, days, load, plans
 from uk_management_bot.services.cleaning.planning import PlanError, parse_items
 from uk_management_bot.utils.business_time import business_wall_clock
@@ -159,6 +163,45 @@ async def test_load_sums_floors_by_cleaner_and_flags_overload(db):
     assert first.buildings == {1: [18, 0, 18, 0, 18, 0, 0], 2: [5, 4, 0, 5, 4, 0, 0]}
     assert (second.by_weekday[0], second.percent, second.overloaded) == (9, 45, False)
     assert report.unassigned == []
+
+
+async def test_load_m2_counts_houses_with_areas_and_flags_missing(db):
+    yesterday = _at(MON - timedelta(days=1))
+    await plans.save_plan(db, building_id=1, items=WET, extra_points=[], actor_id=MANAGER, now=yesterday)      # 9 эт.
+    await plans.save_plan(db, building_id=2, items=SPLIT, extra_points=[], actor_id=MANAGER, now=yesterday)
+    await assignments.assign(db, building_id=1, entrances=[1, 2], user_id=CLEANER, actor_id=MANAGER, now=yesterday)
+    await assignments.assign(db, building_id=2, entrances=None, user_id=CLEANER, actor_id=MANAGER, now=yesterday)
+    db.add(CleaningBuildingSettings(building_id=1, areas={"entrances": {
+        "*": {"typical": 20, "floors": {"1": 60}}, "2": {"typical": 30}}}))
+    await db.commit()
+
+    first = (await load.report(db, day=MON, norm=40, m2_norm=400)).cleaners[CLEANER]
+
+    one_day = (60 + 20 * 8) + (60 + 30 * 8)  # подъезды 1 и 2 дома 1; дом 2 без площадей не считается
+    assert first.m2_by_weekday == [one_day, 0, one_day, 0, one_day, 0, 0]
+    assert (first.m2_peak, first.m2_percent, first.overloaded) == (520, 130, True)
+    assert first.missing_areas == {2}
+    assert first.by_weekday[0] == 23  # этажи как были
+
+
+async def test_load_m2_incomplete_still_overloads_by_floors(db):
+    """Дом без площадей занижает м² — тогда перегруз ловится и по этажам, а не пропадает."""
+    yesterday = _at(MON - timedelta(days=1))
+    await plans.save_plan(db, building_id=1, items=WET, extra_points=[], actor_id=MANAGER, now=yesterday)  # 9 эт.
+    await assignments.assign(db, building_id=1, entrances=[1, 2, 3], user_id=CLEANER, actor_id=MANAGER, now=yesterday)
+    first = (await load.report(db, day=MON, norm=20, m2_norm=400)).cleaners[CLEANER]
+    assert (first.m2_peak, first.missing_areas, first.peak) == (0, {1}, 27)
+    assert first.overloaded is True
+
+
+async def test_load_overload_by_floors_while_m2_norm_is_off(db):
+    yesterday = _at(MON - timedelta(days=1))
+    await plans.save_plan(db, building_id=1, items=WET, extra_points=[], actor_id=MANAGER, now=yesterday)
+    await assignments.assign(db, building_id=1, entrances=[1], user_id=CLEANER, actor_id=MANAGER, now=yesterday)
+    db.add(CleaningBuildingSettings(building_id=1, areas={"entrances": {"*": {"typical": 1000}}}))
+    await db.commit()
+    first = (await load.report(db, day=MON, norm=40)).cleaners[CLEANER]
+    assert (first.m2_peak, first.m2_percent, first.overloaded) == (9000, 0, False)
 
 
 async def test_load_reports_entrances_with_plan_but_without_cleaner(db):

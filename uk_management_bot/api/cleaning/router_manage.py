@@ -11,11 +11,13 @@ from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Response
-from sqlalchemy import or_, select
+from sqlalchemy import null, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.cleaning.schemas import (
     DB_ID_MAX,
+    CleaningAreasIn,
+    CleaningAreasOut,
     CleaningAssignmentIn,
     CleaningBuildingOut,
     CleaningBuildingsOut,
@@ -39,6 +41,7 @@ from uk_management_bot.database.models.cleaning import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.cleaning import assignments, load, plans, rules
+from uk_management_bot.services.cleaning.areas import AreasError, parse_areas
 from uk_management_bot.services.cleaning.planning import PlanError
 from uk_management_bot.utils.business_time import business_today
 
@@ -140,6 +143,42 @@ async def save_settings(body: CleaningSettingsIn, building_id: int = BuildingId,
     return body
 
 
+def _areas_out(building: Building, areas: Any) -> CleaningAreasOut:
+    return CleaningAreasOut(building_id=building.id, floor_count=building.floor_count,
+                            entrance_count=building.entrance_count, areas=areas)
+
+
+@router.get("/buildings/{building_id}/areas", response_model=CleaningAreasOut)
+async def get_areas(building_id: int = BuildingId, db: AsyncSession = Depends(get_db),
+                    user: User = Depends(_read)):
+    building = await db.get(Building, building_id)
+    if building is None:
+        raise _http("building_not_found")
+    row = await db.get(CleaningBuildingSettings, building_id)
+    return _areas_out(building, row.areas if row is not None else None)
+
+
+@router.put("/buildings/{building_id}/areas", response_model=CleaningAreasOut)
+async def save_areas(body: CleaningAreasIn, building_id: int = BuildingId, db: AsyncSession = Depends(get_db),
+                     user: User = Depends(_manage)):
+    """Площади мест общего пользования дома; нагрузка в м² сразу считается по ним."""
+    building = await db.get(Building, building_id)
+    if building is None:
+        raise _http("building_not_found")
+    try:
+        parse_areas(body.areas, floor_count=building.floor_count, entrance_count=building.entrance_count)
+    except AreasError as exc:
+        raise _http(exc.code) from None
+    row = await db.get(CleaningBuildingSettings, building_id)
+    if row is None:
+        row = CleaningBuildingSettings(building_id=building_id)
+        db.add(row)
+    # None → SQL NULL, а не JSON null; проверенный JSON канонический (ключи — только «3», «-1»).
+    row.areas = body.areas if body.areas is not None else null()
+    await db.commit()
+    return _areas_out(building, body.areas)
+
+
 # ── привязка и нагрузка ─────────────────────────────────────────────────────
 
 @router.put("/assignments", status_code=204)
@@ -157,16 +196,17 @@ async def put_assignment(body: CleaningAssignmentIn, db: AsyncSession = Depends(
 @router.get("/staff", response_model=CleaningStaffOut)
 async def staff(db: AsyncSession = Depends(get_db), user: User = Depends(_read)):
     tomorrow = business_today() + timedelta(days=1)
-    norm = int((await rules.latest(db))["floors_norm_per_day"])
-    report = await load.report(db, day=tomorrow, norm=norm)
+    current = await rules.latest(db)
+    norm, area_norm = int(current["floors_norm_per_day"]), int(current["area_norm_m2_per_day"])
+    report = await load.report(db, day=tomorrow, norm=norm, m2_norm=area_norm)
     assigned = await _assigned(db, tomorrow)
     candidates = (await db.execute(
         select(User).where(User.status == "approved",
                            User.specialization.contains(assignments.CLEANING_SPECIALIZATION))
         .order_by(User.first_name, User.id))).scalars().all()
-    empty = load.CleanerLoad(norm=norm)
+    empty = load.CleanerLoad(norm=norm, m2_norm=area_norm)
     return CleaningStaffOut(
-        norm=norm,
+        norm=norm, area_norm=area_norm,
         cleaners=[
             CleaningStaffMemberOut(
                 user_id=u.id, first_name=u.first_name, last_name=u.last_name,
@@ -174,6 +214,8 @@ async def staff(db: AsyncSession = Depends(get_db), user: User = Depends(_read))
                            for (b, e), uid in sorted(assigned.items()) if uid == u.id],
                 by_weekday=(entry := report.cleaners.get(u.id, empty)).by_weekday, buildings=entry.buildings,
                 week=entry.week, peak=entry.peak, percent=entry.percent, overloaded=entry.overloaded,
+                m2_by_weekday=entry.m2_by_weekday, m2_peak=entry.m2_peak, m2_percent=entry.m2_percent,
+                missing_areas=sorted(entry.missing_areas),
             ) for u in candidates if assignments.is_cleaner(u)
         ],
         unassigned=[CleaningEntranceRef(building_id=b, entrance=e) for b, e in report.unassigned],

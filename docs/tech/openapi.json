@@ -2266,6 +2266,63 @@
         "title": "ChannelsOut",
         "type": "object"
       },
+      "CleaningAreasIn": {
+        "properties": {
+          "areas": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Areas"
+          }
+        },
+        "required": [
+          "areas"
+        ],
+        "title": "CleaningAreasIn",
+        "type": "object"
+      },
+      "CleaningAreasOut": {
+        "properties": {
+          "areas": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Areas"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance_count": {
+            "title": "Entrance Count",
+            "type": "integer"
+          },
+          "floor_count": {
+            "title": "Floor Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "areas",
+          "building_id",
+          "floor_count",
+          "entrance_count"
+        ],
+        "title": "CleaningAreasOut",
+        "type": "object"
+      },
       "CleaningAssignmentIn": {
         "properties": {
           "building_id": {
@@ -3375,6 +3432,28 @@
             ],
             "title": "Last Name"
           },
+          "m2_by_weekday": {
+            "items": {
+              "type": "number"
+            },
+            "title": "M2 By Weekday",
+            "type": "array"
+          },
+          "m2_peak": {
+            "title": "M2 Peak",
+            "type": "number"
+          },
+          "m2_percent": {
+            "title": "M2 Percent",
+            "type": "integer"
+          },
+          "missing_areas": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Missing Areas",
+            "type": "array"
+          },
           "overloaded": {
             "title": "Overloaded",
             "type": "boolean"
@@ -3406,6 +3485,10 @@
           "week",
           "peak",
           "percent",
+          "m2_by_weekday",
+          "m2_peak",
+          "m2_percent",
+          "missing_areas",
           "overloaded"
         ],
         "title": "CleaningStaffMemberOut",
@@ -3413,6 +3496,10 @@
       },
       "CleaningStaffOut": {
         "properties": {
+          "area_norm": {
+            "title": "Area Norm",
+            "type": "integer"
+          },
           "cleaners": {
             "items": {
               "$ref": "#/components/schemas/CleaningStaffMemberOut"
@@ -3434,6 +3521,7 @@
         },
         "required": [
           "norm",
+          "area_norm",
           "cleaners",
           "unassigned"
         ],
@@ -19695,6 +19783,113 @@
           }
         ],
         "summary": "List Buildings",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/buildings/{building_id}/areas": {
+      "get": {
+        "operationId": "get_areas_api_v2_cleaning_buildings__building_id__areas_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningAreasOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Areas",
+        "tags": [
+          "cleaning"
+        ]
+      },
+      "put": {
+        "description": "Площади мест общего пользования дома; нагрузка в м² сразу считается по ним.",
+        "operationId": "save_areas_api_v2_cleaning_buildings__building_id__areas_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningAreasIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningAreasOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Areas",
         "tags": [
           "cleaning"
         ]
