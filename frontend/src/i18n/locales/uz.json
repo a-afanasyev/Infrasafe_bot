@@ -73,17 +73,23 @@
     },
     "staff": {
       "title": "Farroshlar, uylar va yuklama",
-      "subtitle": "Yuklama qavatlarda hisoblanadi: reja bo'yicha har kuni nechta qavat to'g'ri keladi.",
+      "subtitle": "Yuklama — reja bo'yicha har kuni qavatlar va umumiy foydalanish joylarining m². m² me'yori berilgan bo'lsa, ortiqcha yuklama m² bo'yicha hisoblanadi.",
       "norm": "Farrosh uchun me'yor, kuniga qavat",
+      "normM2": "Me'yor, kuniga m² (0 — qavatlar bo'yicha)",
       "saveNorm": "Me'yorni saqlash",
       "assignments": "Biriktirish va yuklama",
       "col": {
         "cleaner": "Farrosh",
         "buildings": "Uylar",
         "week": "Haftada qavatlar",
-        "peak": "Eng og'ir kun",
-        "percent": "Me'yorga nisbatan"
+        "peak": "Eng og'ir kun, qavat",
+        "peakM2": "Eng og'ir kun, m²",
+        "percent": "Me'yorga nisbatan (qavat)",
+        "percentM2": "Me'yorga nisbatan (m²)"
       },
+      "overloadM2": "Ortiqcha yuklama: {{name}} — me'yor {{norm}} m² bo'lganda kuniga {{peak}} m².",
+      "missingAreas": "maydonlar yo'q: {{list}}",
+      "m2": "{{n}} m²",
       "addBuilding": "+ Uy",
       "addBuildingFor": "Uy biriktirish: {{name}}",
       "unassign": "Olib tashlash: {{address}}",
@@ -231,7 +237,29 @@
       "planSaved": "Reja saqlandi, ertadan kuchga kiradi",
       "settingsSaved": "Uy sozlamalari saqlandi",
       "assigned": "Biriktirish o'zgartirildi, ertadan kuchga kiradi",
-      "rulesSaved": "Sozlamalar saqlandi"
+      "rulesSaved": "Sozlamalar saqlandi",
+      "areasSaved": "Maydonlar saqlandi, yuklama qayta hisoblandi"
+    },
+    "areas": {
+      "title": "Umumiy foydalanish joylari maydoni, m²",
+      "hint": "Farroshlar yuklamasi m² da shu bo'yicha hisoblanadi. «Barcha yo'laklar» — uy qiymatlari; yo'lak qatori — faqat farq qiladigan joylari. Yo'lakning bo'sh maydoni «Barcha yo'laklar»dan olinadi. Darhol kuchga kiradi.",
+      "all": "Barcha yo'laklar",
+      "entrance": "{{n}}-yo'lak",
+      "col": {
+        "scope": "Yo'lak",
+        "typical": "Namunaviy qavat",
+        "floor1": "1-qavat",
+        "basement": "−1 qavat",
+        "special": "Alohida qavatlar"
+      },
+      "specialHint": "16:31; 30:28.5",
+      "addEntrance": "Farq qiladigan yo'lak…",
+      "add": "Qo'shish",
+      "save": "Maydonlarni saqlash",
+      "error": {
+        "badNumber": "Maydon — 0 dan 10000 gacha son.",
+        "badSpecial": "Alohida qavatlar — «qavat:m²» «;» bilan, masalan 16:31; 30:28.5."
+      }
     },
     "errors": {
       "stale": "Siz ko‘rayotganingizda topshiriq o‘zgardi (yangi surat, shikoyat yoki qaror). Ma’lumotlar yangilandi — tekshirib, qayta urinib ko‘ring.",
@@ -250,7 +278,12 @@
       "bad_range": "Davr juda uzun.",
       "building_not_found": "Uy topilmadi.",
       "not_found": "Topilmadi.",
-      "media_unavailable": "Suratlar ombori vaqtincha ishlamayapti, keyinroq urinib ko‘ring."
+      "media_unavailable": "Suratlar ombori vaqtincha ishlamayapti, keyinroq urinib ko‘ring.",
+      "bad_areas": "Maydonlarni tekshiring.",
+      "bad_area": "Maydon — 0 dan 10000 gacha son.",
+      "bad_area_floor": "Maydon qavati uy qavatlaridan tashqarida.",
+      "bad_area_entrance": "Uyda bunday yo'lak yo'q.",
+      "bad_area_point": "Maydon noma'lum nuqta uchun berilgan."
     }
   },
   "paymentControl": {

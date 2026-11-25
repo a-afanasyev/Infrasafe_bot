@@ -541,6 +541,20 @@
     "_require_enabled"
    ]
   },
+  "GET /api/v2/cleaning/buildings/{building_id}/areas": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
   "GET /api/v2/cleaning/buildings/{building_id}/plan": {
    "auth": "roles",
    "allow": [
@@ -3517,6 +3531,20 @@
    ]
   },
   "PUT /api/v2/cleaning/assignments": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "PUT /api/v2/cleaning/buildings/{building_id}/areas": {
    "auth": "roles",
    "allow": [
     "manager",

@@ -13,6 +13,7 @@ import {
   useSaveCleaningSettings,
 } from '../../hooks/useCleaning'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
+import CleaningAreasCard from './CleaningAreasCard'
 import {
   type DraftItem,
   BASEMENT_FLOOR,
@@ -307,6 +308,7 @@ export default function CleaningPlanPage() {
       {building && plan.data && (
         <PlanEditor key={`${building.id}:${plan.data.upcoming?.id ?? plan.data.current?.id ?? 0}`} building={building} view={plan.data} />
       )}
+      {building && <CleaningAreasCard buildingId={building.id} />}
     </div>
   )
 }

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
 import type {
+  CleaningAreas,
+  CleaningAreasView,
   CleaningBuilding,
   CleaningComplaint,
   CleaningPlan,
@@ -28,6 +30,7 @@ export const cleaningKeys = {
   all: ['cleaning'] as const,
   buildings: ['cleaning', 'buildings'] as const,
   plan: (buildingId: number) => ['cleaning', 'plan', buildingId] as const,
+  areas: (buildingId: number) => ['cleaning', 'areas', buildingId] as const,
   staff: ['cleaning', 'staff'] as const,
   rules: ['cleaning', 'rules'] as const,
 }
@@ -44,6 +47,15 @@ export function useCleaningPlan(buildingId: number | null) {
   return useQuery<CleaningPlanView>({
     queryKey: cleaningKeys.plan(buildingId ?? 0),
     queryFn: () => apiClient.get(`${CLEANING_BASE}/buildings/${buildingId}/plan`).then((r) => r.data),
+    enabled: buildingId !== null,
+    staleTime: STALE_MS,
+  })
+}
+
+export function useCleaningAreas(buildingId: number | null) {
+  return useQuery<CleaningAreasView>({
+    queryKey: cleaningKeys.areas(buildingId ?? 0),
+    queryFn: () => apiClient.get(`${CLEANING_BASE}/buildings/${buildingId}/areas`).then((r) => r.data),
     enabled: buildingId !== null,
     staleTime: STALE_MS,
   })
@@ -98,6 +110,14 @@ export function useSaveCleaningSettings(buildingId: number) {
     (body: { show_to_residents: boolean; show_photos: boolean }) =>
       apiClient.put(`${CLEANING_BASE}/buildings/${buildingId}/settings`, body).then((r) => r.data),
     'cleaning.toast.settingsSaved',
+  )
+}
+
+export function useSaveCleaningAreas(buildingId: number) {
+  return useCleaningMutation(
+    (areas: CleaningAreas | null) =>
+      apiClient.put(`${CLEANING_BASE}/buildings/${buildingId}/areas`, { areas }).then((r) => r.data as CleaningAreasView),
+    'cleaning.toast.areasSaved',
   )
 }
 

@@ -40,6 +40,17 @@ class CleaningSettingsIn(BaseModel):
     show_photos: bool
 
 
+class CleaningAreasIn(BaseModel):
+    # Площади мест общего пользования по подъездам (services/cleaning/areas.py); None — убрать.
+    areas: Optional[dict[str, Any]]
+
+
+class CleaningAreasOut(CleaningAreasIn):
+    building_id: int
+    floor_count: int
+    entrance_count: int
+
+
 class CleaningEntranceOut(BaseModel):
     entrance: int
     user_id: Optional[int]
@@ -82,11 +93,16 @@ class CleaningStaffMemberOut(BaseModel):
     week: int
     peak: int
     percent: int
-    overloaded: bool
+    m2_by_weekday: list[float]
+    m2_peak: float
+    m2_percent: int
+    missing_areas: list[int]  # дома без площадей — их м² в нагрузку не вошли
+    overloaded: bool  # по м², если задана норма м², иначе по этажам
 
 
 class CleaningStaffOut(BaseModel):
     norm: int
+    area_norm: int  # 0 — норма м² не задана
     cleaners: list[CleaningStaffMemberOut]
     unassigned: list[CleaningEntranceRef]
 

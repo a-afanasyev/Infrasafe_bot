@@ -45,6 +45,26 @@ export interface CleaningBuilding {
   entrances: { entrance: number; user_id: number | null }[]
 }
 
+/** Площади мест общего пользования подъезда, м². Подъезд переопределяет «*» по полю/ключу. */
+export interface CleaningEntranceAreas {
+  typical?: number
+  /** Отличающиеся этажи: «1», «-1», «16». */
+  floors?: Record<string, number>
+  /** Работы-точки плана: fire_stairs, parking, elevator. */
+  points?: Partial<Record<CleaningWorkKind, number>>
+}
+
+export interface CleaningAreas {
+  entrances: Record<string, CleaningEntranceAreas>
+}
+
+export interface CleaningAreasView {
+  building_id: number
+  floor_count: number
+  entrance_count: number
+  areas: CleaningAreas | null
+}
+
 export interface CleaningEntranceRef {
   building_id: number
   entrance: number
@@ -60,11 +80,19 @@ export interface CleaningStaffMember {
   week: number
   peak: number
   percent: number
+  m2_by_weekday: number[]
+  m2_peak: number
+  m2_percent: number
+  /** Дома без площадей — их м² в нагрузку не вошли. */
+  missing_areas: number[]
+  /** По м², если задана норма м², иначе по этажам. */
   overloaded: boolean
 }
 
 export interface CleaningStaff {
   norm: number
+  /** 0 — норма м² не задана. */
+  area_norm: number
   cleaners: CleaningStaffMember[]
   unassigned: CleaningEntranceRef[]
 }
