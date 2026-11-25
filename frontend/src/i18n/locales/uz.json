@@ -169,7 +169,8 @@
       "ttl": "Topshiriq ochilgandan keyingi ishonch oynasi, daq",
       "deferred": "Oynadan keyin yuborilgan suratlarni avtomatik qabul qilish",
       "save": "Sozlamalarni saqlash",
-      "effective": "Sozlamalar ertadan kuchga kiradi: bugungi kun avvalgilari bo'yicha o'tadi."
+      "effective": "Sozlamalar ertadan kuchga kiradi: bugungi kun avvalgilari bo'yicha o'tadi.",
+      "todayUntil": "Bugun suratlar soat {{time}} gacha qabul qilinadi. Kun oxirini kechroqqa surish darhol kuchga kiradi, qolgan sozlamalar — ertadan."
     },
     "task": {
       "title": "Tozalash topshirig'i",

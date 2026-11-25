@@ -1,11 +1,17 @@
 """Настройки модуля «Уборка»: версии append-only, значение на дату.
 
 Правка настроек создаёт новую строку ``cleaning_rules``; на бизнес-дату действует
-последняя версия, созданная ДО начала этой даты. Поэтому смена времени конца
-дня (и любого порога) вступает в силу с завтра и не обрывает идущий день.
+последняя версия, созданная ДО начала этой даты. Поэтому смена любого порога
+вступает в силу с завтра и не обрывает идущий день.
+
+Одно исключение — ПРОДЛЕНИЕ конца дня. Если новое ``day_end_time`` позже
+сегодняшнего, а день ещё не закрыт, оно применяется сразу (``_extend_today``):
+менеджер, который видит, что уборщицы не успевают, продлевает день именно на
+сегодня. Сократить идущий день настройкой нельзя — это оборвало бы работу.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -15,8 +21,11 @@ from typing import Any, Mapping, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.database.models.cleaning import CleaningRules
-from uk_management_bot.utils.business_time import business_day_window, business_wall_clock
+from uk_management_bot.database.models.cleaning import CleaningDay, CleaningRules
+from uk_management_bot.utils.business_time import business_day_window, business_today, business_wall_clock
+from uk_management_bot.utils.datetime_utils import as_utc, utc_now
+
+logger = logging.getLogger(__name__)
 
 DEFAULTS: Mapping[str, Any] = MappingProxyType({
     "day_end_time": "23:59",          # конец дня уборки, время бизнес-зоны (задаёт менеджер)
@@ -104,10 +113,67 @@ async def latest(db: AsyncSession) -> Rules:
     return Rules(version=row.id if row is not None else None, data=MappingProxyType({**DEFAULTS, **stored}))
 
 
-async def save(db: AsyncSession, patch: Mapping[str, Any], *, actor_id: Optional[int]) -> Rules:
-    """Новая версия настроек = последняя + правка; действует с завтрашней бизнес-даты."""
-    data = {**(await latest(db)).data, **_validated(patch)}
-    row = CleaningRules(data=data, created_by=actor_id)
-    db.add(row)
+async def _open_today(db: AsyncSession, now: datetime, *, lock: bool = False) -> Optional[CleaningDay]:
+    """Сегодняшний день уборки, если он создан и ещё идёт."""
+    # populate_existing: без него уже загруженный в сессию день вернулся бы из
+    # identity map БЕЗ запроса — то есть без FOR UPDATE и с устаревшим closed_at.
+    day = await db.get(CleaningDay, business_today(now), with_for_update=lock, populate_existing=lock)
+    return None if day is None or day.skipped or day.closed_at is not None else day
+
+
+async def today_end_at(db: AsyncSession, *, now: Optional[datetime] = None) -> Optional[datetime]:
+    """До какого момента сегодня принимаются фото; None — дня нет или он уже закрыт."""
+    day = await _open_today(db, now or utc_now())
+    return None if day is None else as_utc(day.day_end_at)
+
+
+async def _extend_today(db: AsyncSession, data: Mapping[str, Any], now: datetime,
+                        actor_id: Optional[int]) -> None:
+    """Применить более поздний конец дня к идущему дню (см. докстринг модуля).
+
+    Строка дня берётся под блокировкой — так же её берёт ``days.close_days``,
+    поэтому продление и закрытие не пересекаются: либо день продлён и закрытие
+    увидит новое время, либо он уже закрыт и остаётся закрытым.
+    """
+    day = await _open_today(db, now, lock=True)
+    if day is None:
+        return
+    new_end = day_end_at(day.work_date, Rules(version=None, data=data))
+    if new_end <= as_utc(day.day_end_at):
+        return
+    # Версия настроек при повторном сохранении не создаётся, поэтому кто и
+    # когда продлил день, остаётся только здесь.
+    logger.info("cleaning: конец дня %s продлён с %s до %s (user_id=%s)",
+                day.work_date, as_utc(day.day_end_at).isoformat(), new_end.isoformat(), actor_id)
+    day.day_end_at = new_end
+    # Напоминание «до конца дня N часов» могло уже уйти со старым временем —
+    # сбрасываем отметку, чтобы оно ушло заново, с новым.
+    day.reminded_at = None
     await db.flush()
-    return Rules(version=row.id, data=MappingProxyType(data))
+
+
+async def save(db: AsyncSession, patch: Mapping[str, Any], *, actor_id: Optional[int],
+               now: Optional[datetime] = None) -> Rules:
+    """Новая версия настроек = последняя + правка; действует с завтрашней бизнес-даты.
+
+    Исключение — продление конца дня, оно применяется и к идущему дню. Правка,
+    которая ничего не меняет, версию не создаёт: журнал версий — это журнал
+    изменений, а не нажатий «Сохранить».
+
+    Продление проверяется при КАЖДОМ сохранении с ``day_end_time``, даже если
+    версия не изменилась: настройку могли сохранить раньше, чем был создан
+    сегодняшний день (тогда он создан по вчерашней версии), и повторное нажатие
+    «Сохранить» с тем же временем обязано его продлить.
+    """
+    current = await latest(db)
+    data = {**current.data, **_validated(patch)}
+    if data == dict(current.data):
+        saved = current
+    else:
+        row = CleaningRules(data=data, created_by=actor_id)
+        db.add(row)
+        await db.flush()
+        saved = Rules(version=row.id, data=MappingProxyType(data))
+    if "day_end_time" in patch:
+        await _extend_today(db, data, now or utc_now(), actor_id)
+    return saved
