@@ -53,7 +53,9 @@ const get = <T,>(url: string, params?: Record<string, string>): Promise<T> =>
   twaClient.get(url, params ? { params } : undefined).then((r) => r.data)
 
 export const searchResidents = (q: string) => get<ResidentMatch[]>(`${CC}/search-resident`, { q })
-export const residentApartments = (userId: number) => get<ResidentApartment[]>(`${CC}/residents/${userId}/apartments`)
+/** `phone` — цифры номера звонящего: без них диспетчеру квартиры не отдаются. */
+export const residentApartments = (userId: number, phone: string) =>
+  get<ResidentApartment[]>(`${CC}/residents/${userId}/apartments`, { phone })
 export const listYards = () => get<Yard[]>('/api/v2/addresses/yards')
 export const listBuildings = (yardId: number) => get<Building[]>(`/api/v2/addresses/yards/${yardId}/buildings`)
 export const listApartments = (buildingId: number) => get<ApartmentNumber[]>(`${CC}/buildings/${buildingId}/apartments`)

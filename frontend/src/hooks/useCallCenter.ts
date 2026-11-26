@@ -71,9 +71,10 @@ export function useCallCenterCapabilities(enabled: boolean) {
 
 // ── Страница диспетчера (/dispatch): те же эндпоинты, что у экрана в Telegram ──
 
-/** Одобренные квартиры жителя — адрес в одно нажатие. */
-export function callCenterResidentApartments(userId: number): Promise<ResidentApartment[]> {
-  return apiClient.get(`/api/v2/callcenter/residents/${userId}/apartments`).then(r => r.data)
+/** Одобренные квартиры жителя — адрес в одно нажатие. `phone` — цифры номера
+ *  звонящего: без них диспетчеру квартиры не отдаются. */
+export function callCenterResidentApartments(userId: number, phone: string): Promise<ResidentApartment[]> {
+  return apiClient.get(`/api/v2/callcenter/residents/${userId}/apartments`, { params: { phone } }).then(r => r.data)
 }
 
 /** Номера квартир дома — узкий список без данных жильцов. */

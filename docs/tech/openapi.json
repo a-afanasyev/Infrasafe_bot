@@ -13644,15 +13644,10 @@
             "default": 0,
             "title": "Requests Count",
             "type": "integer"
-          },
-          "telegram_id": {
-            "title": "Telegram Id",
-            "type": "integer"
           }
         },
         "required": [
-          "id",
-          "telegram_id"
+          "id"
         ],
         "title": "ResidentSearchResult",
         "type": "object"
@@ -19620,7 +19615,7 @@
     },
     "/api/v2/callcenter/residents/{user_id}/apartments": {
       "get": {
-        "description": "Квартиры найденного по телефону жителя — адрес заявки в одно касание.\n\nТолько одобренный житель: по произвольному id нельзя узнать, где живёт\nсотрудник или неодобренный аккаунт.",
+        "description": "Квартиры найденного по телефону жителя — адрес заявки в одно касание.\n\nТолько одобренный житель: по произвольному id нельзя узнать, где живёт\nсотрудник или неодобренный аккаунт. Диспетчеру — ещё и только вместе с\nномером звонящего (A12-07): перебор id без номера даёт 404.",
         "operationId": "list_resident_apartments_api_v2_callcenter_residents__user_id__apartments_get",
         "parameters": [
           {
@@ -19630,6 +19625,19 @@
             "schema": {
               "title": "User Id",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Цифры номера звонящего",
+            "in": "query",
+            "name": "phone",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Цифры номера звонящего",
+              "maxLength": 20,
+              "title": "Phone",
+              "type": "string"
             }
           }
         ],

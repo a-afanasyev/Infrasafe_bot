@@ -38,7 +38,7 @@ READ_LIMIT = "60/minute"
 # Создание заявки будит диспетчеризацию и уведомления исполнителям.
 CREATE_LIMIT = "30/minute"
 # Поиск по номеру: меньше цифр — уже не «кто звонит», а перебор справочника.
-PHONE_QUERY_MIN_DIGITS = 7
+PHONE_QUERY_MIN_DIGITS = service.CALLER_NUMBER_DIGITS
 
 
 def _address_option(o: dict) -> AddressOption:
@@ -58,13 +58,16 @@ async def search_resident(
 
     По имени ищет только тот, кто и так ведёт жителей (`residents.manage`);
     остальным (диспетчер) — только по номеру телефона звонящего."""
-    if not can(user, "residents.manage") and not (q.isdigit() and len(q) >= PHONE_QUERY_MIN_DIGITS):
+    manages_residents = can(user, "residents.manage")
+    if not manages_residents and not (q.isdigit() and len(q) >= PHONE_QUERY_MIN_DIGITS):
         raise HTTPException(status_code=422, detail="search by phone digits only")
-    rows = await service.search_approved_applicants(db, q=q)
+    rows = await service.search_approved_applicants(db, q=q, whole_number=not manages_residents)
+    if rows:
+        await service.record_resident_lookup(
+            db, actor_id=user.id, by="phone" if q.isdigit() else "name", user_ids=[row.id for row in rows])
     return [
         ResidentSearchResult(
             id=row.id,
-            telegram_id=row.telegram_id,
             full_name=" ".join(filter(None, [row.first_name, row.last_name])),
             phone=row.phone,
             address=None,
@@ -201,15 +204,19 @@ async def list_building_apartments(
 async def list_resident_apartments(
     request: Request,
     user_id: int,
+    phone: str = Query("", max_length=20, description="Цифры номера звонящего"),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_action("callcenter.use")),
+    user: User = Depends(require_action("callcenter.use")),
 ):
     """Квартиры найденного по телефону жителя — адрес заявки в одно касание.
 
     Только одобренный житель: по произвольному id нельзя узнать, где живёт
-    сотрудник или неодобренный аккаунт."""
+    сотрудник или неодобренный аккаунт. Диспетчеру — ещё и только вместе с
+    номером звонящего (A12-07): перебор id без номера даёт 404."""
     target = await service.user_by_id(db, user_id)
     if target is None or target.status != "approved" or "applicant" not in get_user_roles(target):
+        raise HTTPException(status_code=404, detail="resident not found")
+    if not can(user, "residents.manage") and not service.is_callers_number(target.phone, phone):
         raise HTTPException(status_code=404, detail="resident not found")
     return [CallerApartmentOut(id=a["id"], label=a["label"], building_id=a["building_id"])
             for a in await service.list_resident_apartments(db, user_id)]
