@@ -114,6 +114,7 @@ describe('DispatchPage — приём звонка', () => {
     await screen.findByText('Заявка 261111-007 принята')
     expect(created()).toEqual([{
       category: 'plumbing', urgency: 'medium', description: 'течёт труба в подвале', apartment_id: 12, user_id: 7,
+      caller_phone: '+998901112233',
     }])
   })
 

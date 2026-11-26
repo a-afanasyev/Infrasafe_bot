@@ -19688,6 +19688,7 @@
             "name": "q",
             "required": true,
             "schema": {
+              "maxLength": 64,
               "minLength": 2,
               "title": "Q",
               "type": "string"

@@ -96,6 +96,7 @@ describe('DispatcherPage', () => {
     await screen.findByText('Заявка 261113-007 принята')
     expect(created.body()).toEqual({
       category: 'plumbing', urgency: 'low', description: 'Течёт кран', apartment_id: 77, user_id: 5,
+      caller_phone: '900000001', // сервер сверяет номер звонящего с жителем
     })
   })
 

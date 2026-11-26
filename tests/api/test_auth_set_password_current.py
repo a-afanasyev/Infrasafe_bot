@@ -167,6 +167,29 @@ async def test_change_revokes_other_sessions_but_keeps_current(client_pw, db_ses
 
 
 @pytest.mark.asyncio
+async def test_change_without_session_cookie_revokes_every_session(client_pw, db_session_factory, user_with_password):
+    """Нет куки — «текущую» сессию не опознать: отзываются все, вход заново."""
+    from datetime import datetime, timedelta, timezone
+
+    from uk_management_bot.api.auth.service import hash_token
+    from uk_management_bot.database.models.refresh_token import RefreshToken
+
+    async with db_session_factory() as s:
+        s.add(RefreshToken(user_id=user_with_password.id, token_hash=hash_token("some-session"),
+                           expires_at=datetime.now(timezone.utc) + timedelta(days=1), family_id="fam"))
+        await s.commit()
+
+    r = await client_pw.post(
+        "/api/v2/auth/set-password",
+        json={"password": NEW, "confirm_password": NEW, "current_password": CURRENT},
+        headers=_h(6),
+    )
+    assert r.status_code == 200, r.text
+    async with db_session_factory() as s:
+        assert [t.revocation_reason for t in (await s.execute(select(RefreshToken))).scalars()] == ["password"]
+
+
+@pytest.mark.asyncio
 async def test_profile_reports_has_password_true(client_pw):
     r = await client_pw.get("/api/v2/profile")
     assert r.status_code == 200, r.text

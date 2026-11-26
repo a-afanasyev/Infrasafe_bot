@@ -48,9 +48,15 @@ def _phone_digits(column, *, pg: bool):
 CALLER_NUMBER_DIGITS = 9
 
 
+def is_whole_number(digits: str) -> bool:
+    """Набран номер целиком: только ASCII-цифры (`isdigit` пропускает «²» и
+    арабо-индийские), не меньше национального номера."""
+    return digits.isascii() and digits.isdigit() and len(digits) >= CALLER_NUMBER_DIGITS
+
+
 def is_callers_number(phone: str | None, digits: str) -> bool:
     """Номер жителя оканчивается на набранные цифры (код страны можно не набирать)."""
-    if not digits.isdigit() or len(digits) < CALLER_NUMBER_DIGITS:
+    if not is_whole_number(digits):
         return False
     return "".join(ch for ch in phone or "" if ch.isdigit()).endswith(digits)
 
@@ -68,6 +74,8 @@ async def search_approved_applicants(db: AsyncSession, *, q: str, whole_number: 
     Запрос из одних цифр — это номер звонящего: ищем по цифрам номера, как бы
     он ни был записан (с пробелами, дефисами, скобками). `whole_number` — только
     совпадение номера целиком (диспетчер): подстрокой справочник не перебрать."""
+    if whole_number and not is_whole_number(q):
+        return []  # инвариант сервиса, а не только роутера: в LIKE уходят одни цифры
     escaped_q = _escape_like(q)
     pattern = f"%{escaped_q}%"
     digits = _phone_digits(User.phone, pg=is_postgres(db))

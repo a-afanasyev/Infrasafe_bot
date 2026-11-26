@@ -206,7 +206,7 @@ def verify_telegram_widget(data: dict) -> bool:
     secret_key = hashlib.sha256(settings.BOT_TOKEN.encode()).digest()
     # INV-087: hmac.digest — one-shot, стабильнее при апгрейдах stdlib.
     expected_hash = hmac.digest(secret_key, data_check_string.encode(), "sha256").hex()
-    return hmac.compare_digest(expected_hash, received_hash)
+    return hmac.compare_digest(expected_hash.encode(), received_hash.encode())
 
 
 def verify_twa_init_data(init_data: str, bot_token: str) -> Optional[dict]:
@@ -230,7 +230,7 @@ def verify_twa_init_data(init_data: str, bot_token: str) -> Optional[dict]:
     secret_key = hmac.digest(b"WebAppData", bot_token.encode(), "sha256")
     expected_hash = hmac.digest(secret_key, data_check_string.encode(), "sha256").hex()
 
-    if not hmac.compare_digest(expected_hash, received_hash):
+    if not hmac.compare_digest(expected_hash.encode(), received_hash.encode()):
         return None
 
     user_str = parsed.get("user")

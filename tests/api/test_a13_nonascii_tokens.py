@@ -34,3 +34,12 @@ def test_health_token_with_non_ascii_is_401():
         with pytest.raises(HTTPException) as exc:
             require_health_token(f"Bearer {NON_ASCII}")
     assert exc.value.status_code == 401
+
+
+def test_telegram_login_hashes_with_non_ascii_are_rejected():
+    """Те же сравнения в проверке входа через Telegram: хэш присылает клиент."""
+    from uk_management_bot.api.auth.service import verify_telegram_widget, verify_twa_init_data
+
+    now = int(time.time())
+    assert verify_telegram_widget({"id": 1, "auth_date": now, "hash": NON_ASCII}) is False
+    assert verify_twa_init_data(f"auth_date={now}&user=%7B%7D&hash={NON_ASCII}", "1:token") is None

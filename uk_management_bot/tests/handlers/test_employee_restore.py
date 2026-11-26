@@ -126,3 +126,18 @@ def test_approve_still_admits_invited_manager(db):
     assert AuthService(db).approve_user(invited.id, manager.id, "c") == "ok"
     db.refresh(invited)
     assert invited.status == "approved"
+
+
+@pytest.mark.parametrize("roles, status, expected", [
+    (["manager"], "blocked", "already_registered"),
+    (["manager"], "deleted", "already_registered"),
+    (["executor"], "blocked", "ok"),  # прежнее поведение для непривилегированных
+])
+def test_invite_does_not_launder_blocked_manager_into_pending(db, monkeypatch, roles, status, expected):
+    """Инвайт переводит в `pending`, а из `pending` одобрение разрешено: без этого
+    отказа заблокированный менеджер возвращался бы цепочкой инвайт -> одобрение."""
+    from uk_management_bot.handlers import auth as auth_handlers
+
+    monkeypatch.setattr(auth_handlers.InviteService, "validate_invite", lambda self, token: {"role": "executor"})
+    target = _user(db, 60, roles=roles, status=status)
+    assert auth_handlers._load_join_gate(db, "token", target.telegram_id)[0] == expected

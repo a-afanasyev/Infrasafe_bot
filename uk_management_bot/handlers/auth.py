@@ -23,6 +23,7 @@ from ..states.registration import RegistrationStates
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.services.users.privileged import is_privileged_target
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter, TokenAlreadyUsedError
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
@@ -82,6 +83,12 @@ def _load_join_gate(db, token: str, telegram_id: int):
                 logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
                 return ("registration_pending", None)
             logger.info(f"Pending-applicant {telegram_id} проходит апгрейд роли по инвайту")
+        # A12-06: заблокированного или удалённого менеджера/админа инвайт в
+        # очередь одобрения не возвращает — иначе `blocked -> pending -> approved`
+        # обходило бы отказ approve_user/unblock_user (A10-INT-01).
+        elif is_privileged_target(existing_user):
+            logger.warning(f"Инвайт отклонён: привилегированный пользователь {telegram_id} в статусе {existing_user.status}")
+            return ("already_registered", None)
         # Для других статусов (blocked и т.д.) разрешаем повторную регистрацию
         else:
             logger.info(f"Пользователь {telegram_id} имеет статус {existing_user.status}, разрешаем повторную регистрацию")
