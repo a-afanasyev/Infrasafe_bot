@@ -89,13 +89,17 @@ async def lifespan(app: FastAPI):
     async def _outbox_retention_loop():
         # OPS-105: purge old 'sent' outbox records daily. Sleep first so we
         # don't run a DELETE during startup churn.
-        from uk_management_bot.services.outbox_retention import purge_old_sent_outbox
+        from uk_management_bot.services.outbox_retention import (
+            purge_dead_refresh_tokens,
+            purge_old_sent_outbox,
+        )
 
         await asyncio.sleep(600)  # 10 min warmup
         while True:
             try:
                 result = await purge_old_sent_outbox()
                 _logger.info("Outbox retention cycle: %s", result)
+                _logger.info("Refresh-token retention cycle: %s", await purge_dead_refresh_tokens())
             except Exception:
                 _logger.exception("Outbox retention error")
             await asyncio.sleep(86400)  # 24 hours

@@ -36,9 +36,9 @@ class TestResidentSearchResult:
         with pytest.raises(ValidationError):
             ResidentSearchResult(telegram_id=123456)
 
-    def test_missing_telegram_id_raises(self):
-        with pytest.raises(ValidationError):
-            ResidentSearchResult(id=1)
+    def test_telegram_id_is_not_part_of_the_result(self):
+        """A12-07: ключ жителя — внутренний id; telegram_id наружу не отдаётся."""
+        assert "telegram_id" not in ResidentSearchResult(id=1, telegram_id=123456).model_dump()
 
     def test_from_attributes_config(self):
         assert ResidentSearchResult.model_config["from_attributes"] is True

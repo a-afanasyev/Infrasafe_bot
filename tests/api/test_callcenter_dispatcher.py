@@ -122,7 +122,8 @@ async def test_building_apartments_are_numbers_only(dispatcher, olmazor):
 
 @pytest.mark.asyncio
 async def test_resident_apartments_for_one_tap_address(dispatcher, olmazor, resident_user):
-    r = await dispatcher.get(f"/api/v2/callcenter/residents/{resident_user.id}/apartments")
+    r = await dispatcher.get(f"/api/v2/callcenter/residents/{resident_user.id}/apartments",
+                             params={"phone": "001234567"})
     assert r.status_code == 200, r.text
     assert r.json() == [{"id": olmazor["a12"].id, "label": "Yangi Olmazor, 4G, кв. 12 (Olmazor City Phase 3)",
                          "building_id": olmazor["b4"].id}]
@@ -232,6 +233,133 @@ async def test_resident_apartments_only_for_approved_residents(dispatcher, olmaz
     """Не житель (сотрудник, чужой id) — 404: по id нельзя узнать, кто где живёт."""
     assert (await dispatcher.get(f"/api/v2/callcenter/residents/{manager_user.id}/apartments")).status_code == 404
     assert (await dispatcher.get("/api/v2/callcenter/residents/999999/apartments")).status_code == 404
+
+
+# ── A12-07 (аудиты #12, #13): житель — по внутреннему id, только в связи со звонком ──
+
+@pytest.mark.asyncio
+async def test_search_result_is_keyed_by_internal_id_without_telegram_id(dispatcher, resident_user):
+    found = (await dispatcher.get(SEARCH, params={"q": "001234567"})).json()
+    assert found[0]["id"] == resident_user.id
+    assert "telegram_id" not in found[0]
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_finds_caller_by_whole_number_only(dispatcher, resident_user):
+    """Кусок номера не находит: иначе справочник жителей перебирается подстроками."""
+    assert (await dispatcher.get(SEARCH, params={"q": "00123456"})).status_code == 422  # меньше 9 цифр
+    middle = await dispatcher.get(SEARCH, params={"q": "900123456"})  # 9 цифр из середины номера
+    assert middle.status_code == 200 and middle.json() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("params", [{}, {"phone": "999999999"}, {"phone": "1234567"}])
+async def test_dispatcher_needs_callers_number_for_apartments(dispatcher, olmazor, resident_user, params):
+    """Перебор id ничего не даёт: квартиры — только тому, кто знает номер жителя."""
+    r = await dispatcher.get(f"/api/v2/callcenter/residents/{resident_user.id}/apartments", params=params)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_manager_reads_resident_apartments_without_number(client, olmazor, resident_user):
+    r = await client.get(f"/api/v2/callcenter/residents/{resident_user.id}/apartments")
+    assert r.status_code == 200 and [a["id"] for a in r.json()] == [olmazor["a12"].id]
+
+
+@pytest.mark.asyncio
+async def test_resident_lookup_is_audited(dispatcher, db_session, resident_user):
+    import json
+
+    from sqlalchemy import select
+
+    from uk_management_bot.database.models.audit import AuditLog
+
+    resident_id = resident_user.id
+    await dispatcher.get(SEARCH, params={"q": "001234567"})
+    await dispatcher.get(SEARCH, params={"q": "999999999"})  # промах — тоже след: иначе перебор не увидеть
+    db_session.expire_all()
+    rows = (await db_session.execute(
+        select(AuditLog).where(AuditLog.action == "callcenter.resident_lookup").order_by(AuditLog.id))).scalars().all()
+    details = [r.details if isinstance(r.details, dict) else json.loads(r.details) for r in rows]
+    assert details == [{"by": "phone", "matched_user_ids": [resident_id]}, {"by": "phone", "matched_user_ids": []}]
+    assert not any("001234567" in str(r.details) or "999999999" in str(r.details) for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_search_query_length_is_capped(dispatcher):
+    assert (await dispatcher.get(SEARCH, params={"q": "9" * 65})).status_code == 422
+
+
+# Заявка от имени жителя — тот же доступ к его данным: без номера звонящего
+# перебор user_id/apartment_id по кодам ответа выдавал, кто житель и где живёт.
+REQUESTS = "/api/v2/callcenter/requests"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phone", [None, "+998909999999", "1234567"])
+async def test_dispatcher_cannot_file_for_resident_without_his_number(dispatcher, olmazor, resident_user, phone):
+    body = {**_body(olmazor, building_id=None, apartment_id=olmazor["a12"].id), "user_id": resident_user.id}
+    if phone:
+        body["caller_phone"] = phone
+    r = await dispatcher.post(REQUESTS, json=body)
+    assert (r.status_code, r.json()["detail"]) == (404, "target user not found")
+
+
+@pytest.mark.asyncio
+async def test_unknown_staff_and_foreign_ids_answer_alike(dispatcher, olmazor, manager_user):
+    """Один ответ на «нет такого» и «не житель»: по коду id не перебрать."""
+    answers = set()
+    for user_id in (999999, manager_user.id):
+        r = await dispatcher.post(REQUESTS, json={**_body(olmazor), "user_id": user_id, "caller_phone": "+998901112233"})
+        answers.add((r.status_code, r.json()["detail"]))
+    assert answers == {(404, "target user not found")}
+
+
+@pytest.mark.asyncio
+async def test_dispatcher_files_for_resident_who_is_calling(dispatcher, db_session, olmazor, resident_user):
+    from sqlalchemy import select
+
+    from uk_management_bot.database.models.request import Request
+
+    resident_id = resident_user.id
+    r = await dispatcher.post(REQUESTS, json={
+        **_body(olmazor, building_id=None, apartment_id=olmazor["a12"].id),
+        "user_id": resident_id, "caller_phone": "+79001234567"})
+    assert r.status_code == 201, r.text
+    db_session.expire_all()
+    request = (await db_session.execute(
+        select(Request).where(Request.request_number == r.json()["request_number"]))).scalar_one()
+    assert request.user_id == resident_id
+    assert request.notes is None, "номер — подтверждение звонка, в примечания не идёт"
+
+
+@pytest.mark.asyncio
+async def test_apartments_by_number_are_audited_too(dispatcher, db_session, olmazor, resident_user):
+    """Квартиры по номеру можно запросить и без поиска — след должен остаться."""
+    import json
+
+    from sqlalchemy import select
+
+    from uk_management_bot.database.models.audit import AuditLog
+
+    resident_id = resident_user.id
+    await dispatcher.get(f"/api/v2/callcenter/residents/{resident_id}/apartments", params={"phone": "001234567"})
+    await dispatcher.get(f"/api/v2/callcenter/residents/{resident_id}/apartments", params={"phone": "999999999"})
+    db_session.expire_all()
+    rows = (await db_session.execute(
+        select(AuditLog).where(AuditLog.action == "callcenter.resident_lookup"))).scalars().all()
+    details = [r.details if isinstance(r.details, dict) else json.loads(r.details) for r in rows]
+    assert sorted(details, key=str) == sorted(
+        [{"by": "apartments", "matched_user_ids": [resident_id]}, {"by": "apartments", "matched_user_ids": []}], key=str)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("q", ["²²²²²²²²²", "٠٠١٢٣٤٥٦٧"])
+async def test_non_ascii_digits_are_not_a_number(dispatcher, olmazor, resident_user, q):
+    """`str.isdigit` считает цифрами «²» и арабо-индийские: номером это не является."""
+    assert (await dispatcher.get(SEARCH, params={"q": q})).status_code == 422
+    r = await dispatcher.get(f"/api/v2/callcenter/residents/{resident_user.id}/apartments", params={"phone": q})
+    assert r.status_code == 404
 
 
 @pytest.mark.asyncio

@@ -47,7 +47,7 @@ async def _require_enabled() -> None:
 async def _require_service_token(x_service_token: Optional[str] = Header(default=None)) -> None:
     """Юзербот: сервисный токен. Пустой настроенный токен → 401 (fail-closed)."""
     expected = settings.NEWS_WATCH_SERVICE_TOKEN
-    if not expected or not x_service_token or not hmac.compare_digest(x_service_token, expected):
+    if not expected or not x_service_token or not hmac.compare_digest(x_service_token.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 

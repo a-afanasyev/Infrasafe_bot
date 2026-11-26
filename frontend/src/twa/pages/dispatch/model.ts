@@ -128,6 +128,9 @@ export function buildCheckBody(d: Draft): CreateBody {
 export function buildCreateBody(d: Draft): CreateBody {
   const body: CreateBody = buildCheckBody(d)
   const userId = linkedResidentId(d)
+  // «+» — только если его ввели: номер без кода страны не выдаём за международный.
+  // Нужен и при заявке от имени жителя: сервер сверяет номер звонящего с жителем.
+  body.caller_phone = `${d.phone.trim().startsWith('+') ? '+' : ''}${phoneDigits(d.phone)}`
   if (userId !== undefined) {
     body.user_id = userId
   } else {
@@ -135,8 +138,6 @@ export function buildCreateBody(d: Draft): CreateBody {
     // менеджер (у диспетчера экрана приёмки нет).
     const name = (d.resident?.fullName ?? d.callerName).trim()
     if (name) body.caller_name = name
-    // «+» — только если его ввели: номер без кода страны не выдаём за международный.
-    body.caller_phone = `${d.phone.trim().startsWith('+') ? '+' : ''}${phoneDigits(d.phone)}`
     body.acceptance_mode = 'manager'
   }
   if (needsElevator(d) && d.elevator.elevatorId !== null && d.elevator.operational !== null) {

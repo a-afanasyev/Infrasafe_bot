@@ -358,5 +358,8 @@ async def set_password(
                 detail="current_password_invalid",
             )
 
-    await persist_password_hash(db, db_user, hash_password(data.password))
+    await persist_password_hash(
+        db, db_user, hash_password(data.password),
+        keep_token_value=request.cookies.get(COOKIE_REFRESH_NAME),
+    )
     return {"ok": True}

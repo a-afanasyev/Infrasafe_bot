@@ -76,8 +76,11 @@ describe('DispatcherPage', () => {
     server.use(
       http.get('*/api/v2/callcenter/search-resident', () =>
         HttpResponse.json([{ id: 5, full_name: 'Дилноза Рахимова', phone: '+998900000001' }])),
-      http.get('*/api/v2/callcenter/residents/5/apartments', () =>
-        HttpResponse.json([{ id: 77, label: 'ул. Садовая, 14, кв. 15', building_id: 12 }])),
+      // Как сервер: без цифр номера звонящего квартиры не отдаются (A12-07).
+      http.get('*/api/v2/callcenter/residents/5/apartments', ({ request }) =>
+        new URL(request.url).searchParams.get('phone') === '900000001'
+          ? HttpResponse.json([{ id: 77, label: 'ул. Садовая, 14, кв. 15', building_id: 12 }])
+          : new HttpResponse(null, { status: 404 })),
     )
     const created = captureCreate()
     const user = userEvent.setup()
@@ -93,6 +96,7 @@ describe('DispatcherPage', () => {
     await screen.findByText('Заявка 261113-007 принята')
     expect(created.body()).toEqual({
       category: 'plumbing', urgency: 'low', description: 'Течёт кран', apartment_id: 77, user_id: 5,
+      caller_phone: '900000001', // сервер сверяет номер звонящего с жителем
     })
   })
 

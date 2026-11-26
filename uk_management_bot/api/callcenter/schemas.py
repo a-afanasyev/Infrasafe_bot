@@ -14,8 +14,9 @@ from uk_management_bot.utils.constants import (
 
 
 class ResidentSearchResult(BaseModel):
+    # A12-07: ключ жителя для заявки — внутренний `id` (он же `user_id` при
+    # создании); `telegram_id` экрану звонка не нужен и наружу не отдаётся.
     id: int
-    telegram_id: int
     full_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None

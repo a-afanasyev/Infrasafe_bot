@@ -134,7 +134,7 @@ def _resolve_selected_address(db, telegram_id: int, atype: str, address_id: int)
 async def start_request_creation(message: Message, state: FSMContext, user_status: Optional[str] = None):
     """Начало создания заявки"""
     # Отладочное логирование
-    logger.info(f"[ENTRY_HANDLER] ✅ Handler сработал! Сообщение: '{message.text}' от пользователя {message.from_user.id}")
+    logger.info(f"[ENTRY_HANDLER] ✅ Handler сработал! Сообщение длиной {len(message.text or '')} от пользователя {message.from_user.id}")
     logger.info(f"[ENTRY_HANDLER] CREATE_REQUEST_TEXTS: {CREATE_REQUEST_TEXTS}")
     logger.info(f"[ENTRY_HANDLER] Текущее FSM состояние: {await state.get_state()}")
     
@@ -158,7 +158,7 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
         await message.answer(get_text("errors.default", language=lang))
         return
 
-    logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
+    logger.info(f"Пользователь {message.from_user.id} начал создание заявки")
     # Ф4a-2 (T7): хвост брошенной лифтовой заявки не должен уехать в новую.
     await clear_elevator_data(state)
     await state.set_state(RequestStates.category)
@@ -187,7 +187,7 @@ async def process_category_other_inputs(message: Message, state: FSMContext):
     """Обработчик для любых других текстовых сообщений в состоянии выбора категории"""
     lang = await _get_user_language(message=message)
     user_id = message.from_user.id
-    logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} отправил неожиданный текст: '{message.text}'")
+    logger.info(f"[CATEGORY_SELECTION] Пользователь {user_id} отправил неожиданный текст длиной {len(message.text or '')}")
 
     if message.text == get_text("buttons.cancel", language=lang):
         await cancel_request(message, state, lang=lang)

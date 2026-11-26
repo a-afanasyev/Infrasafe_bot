@@ -3,6 +3,7 @@
 Module-level async функции `(db, *, plain-параметры) -> ORM|примитивы`.
 HTTPException, парсинг и сериализация — в router.py.
 """
+import json
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.apartment import Apartment
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
@@ -42,13 +44,49 @@ def _phone_digits(column, *, pg: bool):
     return column
 
 
-async def search_approved_applicants(db: AsyncSession, *, q: str):
+# A12-07: номер звонящего — это весь национальный номер (9 цифр), а не его кусок.
+CALLER_NUMBER_DIGITS = 9
+
+
+def is_whole_number(digits: str) -> bool:
+    """Набран номер целиком: только ASCII-цифры (`isdigit` пропускает «²» и
+    арабо-индийские), не меньше национального номера."""
+    return digits.isascii() and digits.isdigit() and len(digits) >= CALLER_NUMBER_DIGITS
+
+
+def is_callers_number(phone: str | None, digits: str) -> bool:
+    """Номер жителя оканчивается на набранные цифры (код страны можно не набирать)."""
+    if not is_whole_number(digits):
+        return False
+    return "".join(ch for ch in phone or "" if ch.isdigit()).endswith(digits)
+
+
+async def record_resident_lookup(db: AsyncSession, *, actor_id: int, by: str, user_ids: list[int]) -> None:
+    """Журнал: кто и кого нашёл в колл-центре. Сам номер и имя не пишутся."""
+    db.add(AuditLog(action="callcenter.resident_lookup", user_id=actor_id,
+                    details=json.dumps({"by": by, "matched_user_ids": user_ids})))
+    await db.commit()
+
+
+async def search_approved_applicants(db: AsyncSession, *, q: str, whole_number: bool = False):
     """Поиск approved-жителей по телефону/имени/фамилии (лимит 10).
 
     Запрос из одних цифр — это номер звонящего: ищем по цифрам номера, как бы
-    он ни был записан (с пробелами, дефисами, скобками)."""
+    он ни был записан (с пробелами, дефисами, скобками). `whole_number` — только
+    совпадение номера целиком (диспетчер): подстрокой справочник не перебрать."""
+    if whole_number and not is_whole_number(q):
+        return []  # инвариант сервиса, а не только роутера: в LIKE уходят одни цифры
     escaped_q = _escape_like(q)
     pattern = f"%{escaped_q}%"
+    digits = _phone_digits(User.phone, pg=is_postgres(db))
+    if whole_number:
+        matches = digits.like(f"%{q}")
+    else:
+        matches = or_(
+            ci_contains_any((User.phone, User.first_name, User.last_name), pattern, is_postgres=is_postgres(db)),
+            # Цифры не содержат спецсимволов LIKE — экранирование не нужно.
+            digits.like(f"%{q}%") if q.isdigit() else false(),
+        )
 
     # Single query with subquery for request count to avoid N+1
     count_subq = (
@@ -61,7 +99,6 @@ async def search_approved_applicants(db: AsyncSession, *, q: str):
     result = await db.execute(
         select(
             User.id,
-            User.telegram_id,
             User.first_name,
             User.last_name,
             User.phone,
@@ -74,15 +111,7 @@ async def search_approved_applicants(db: AsyncSession, *, q: str):
                 roles_contain(User.roles, "applicant"),
                 legacy_role_filter("applicant"),
             ),
-            or_(
-                ci_contains_any(
-                    (User.phone, User.first_name, User.last_name),
-                    pattern,
-                    is_postgres=is_postgres(db),
-                ),
-                # Цифры не содержат спецсимволов LIKE — экранирование не нужно.
-                _phone_digits(User.phone, pg=is_postgres(db)).like(f"%{q}%") if q.isdigit() else false(),
-            ),
+            matches,
         ).limit(10)
     )
     return result.all()

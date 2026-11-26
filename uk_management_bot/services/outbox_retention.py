@@ -51,3 +51,34 @@ async def purge_old_sent_outbox(retention_days: int = DEFAULT_RETENTION_DAYS) ->
     except Exception:
         logger.exception("Outbox retention purge failed")
         return {"deleted": 0, "error": "internal_error"}
+
+
+async def purge_dead_refresh_tokens(retention_days: int = DEFAULT_RETENTION_DAYS) -> dict:
+    """A13-06: удалить refresh-токены, просроченные или отозванные больше
+    `retention_days` назад. Никогда не бросает — как `purge_old_sent_outbox`.
+
+    Окно с запасом покрывает срок жизни токена (7 дней): пока отозванный
+    токен ещё мог бы быть предъявлен, его строка нужна обнаружению повтора.
+    """
+    from uk_management_bot.database.models.refresh_token import RefreshToken
+    from uk_management_bot.database.session import AsyncSessionLocal
+
+    if AsyncSessionLocal is None:
+        return {"deleted": 0, "error": "db_unavailable"}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                delete(RefreshToken).where(
+                    (RefreshToken.expires_at < cutoff) | (RefreshToken.revoked_at < cutoff)
+                )
+            )
+            await db.commit()
+            deleted = result.rowcount or 0
+        if deleted:
+            logger.info("Refresh-token retention: purged %d dead tokens", deleted)
+        return {"deleted": deleted}
+    except Exception:
+        logger.exception("Refresh-token retention purge failed")
+        return {"deleted": 0, "error": "internal_error"}

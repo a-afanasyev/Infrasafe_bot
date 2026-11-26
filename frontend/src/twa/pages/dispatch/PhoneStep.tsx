@@ -44,7 +44,7 @@ export default function PhoneStep({ draft, onDone }: Props) {
 
   const pick = async (m: ResidentMatch) => {
     setBusy(true)
-    const apartments = await residentApartments(m.id).catch(() => [])
+    const apartments = await residentApartments(m.id, residentQuery(phone)).catch(() => [])
     setBusy(false)
     onDone({
       phone,

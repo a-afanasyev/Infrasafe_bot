@@ -759,3 +759,45 @@ class TestEncryptedDocumentProxy:
         with _media((foreign_blob, "application/octet-stream")):
             r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
         assert r.status_code == 502
+
+
+class TestDocumentViewIsAudited:
+    """A12-08: кто, чей документ и когда смотрел — восстанавливается по журналу."""
+
+    @staticmethod
+    async def _views(db_session: AsyncSession) -> list:
+        from uk_management_bot.database.models.audit import AuditLog
+
+        db_session.expire_all()
+        return (await db_session.execute(
+            select(AuditLog).where(AuditLog.action == "resident_document_viewed")
+        )).scalars().all()
+
+    async def test_served_document_leaves_audit_row(self, client: AsyncClient, db_session: AsyncSession):
+        import json as _json
+
+        resident = await _resident(db_session, 6501)
+        resident_id = resident.id
+        doc, blob = await _encrypted_doc(db_session, resident_id, _PDF, media_id=8851)
+        doc_id = doc.id
+
+        with _media((blob, "application/octet-stream")):
+            r = await client.get(f"{BASE}/{resident_id}/documents/{doc_id}/file")
+        assert r.status_code == 200
+
+        rows = await self._views(db_session)
+        assert len(rows) == 1
+        details = rows[0].details if isinstance(rows[0].details, dict) else _json.loads(rows[0].details)
+        assert details["target_user_id"] == resident_id
+        assert details["document_id"] == doc_id
+        assert details["document_type"] == "passport"
+        assert rows[0].user_id is not None
+
+    async def test_failed_delivery_is_not_logged_as_view(self, client: AsyncClient, db_session: AsyncSession):
+        resident = await _resident(db_session, 6502)
+        doc, _ = await _encrypted_doc(db_session, resident.id, _JPEG, media_id=8852)
+
+        with _media(None):
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        assert r.status_code == 502
+        assert await self._views(db_session) == []

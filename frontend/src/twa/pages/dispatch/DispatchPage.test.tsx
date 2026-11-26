@@ -17,11 +17,14 @@ let residents: unknown[] = []
 let checks: Array<{ issues: Issue[] } | Error> = []
 
 function mockApi() {
-  mockGet.mockImplementation((url: string) => {
+  mockGet.mockImplementation((url: string, config?: { params?: { phone?: string } }) => {
     if (url === `${CC}/capabilities`) return Promise.resolve({ data: { address_suggest: aiOn } })
     if (url === `${CC}/search-resident`) return Promise.resolve({ data: residents })
+    // Как сервер: без цифр номера звонящего квартиры не отдаются (A12-07).
     if (url === `${CC}/residents/7/apartments`)
-      return Promise.resolve({ data: [{ id: 12, label: 'Yangi Olmazor, 4G, кв. 12', building_id: 4 }] })
+      return /^\d{9}$/.test(config?.params?.phone ?? '')
+        ? Promise.resolve({ data: [{ id: 12, label: 'Yangi Olmazor, 4G, кв. 12', building_id: 4 }] })
+        : Promise.reject(new Error('404'))
     if (url === '/api/v2/addresses/yards') return Promise.resolve({ data: [{ id: 1, name: 'Olmazor City' }] })
     if (url === '/api/v2/addresses/yards/1/buildings')
       return Promise.resolve({ data: [{ id: 4, address: 'Yangi Olmazor, 4G' }] })
@@ -111,6 +114,7 @@ describe('DispatchPage — приём звонка', () => {
     await screen.findByText('Заявка 261111-007 принята')
     expect(created()).toEqual([{
       category: 'plumbing', urgency: 'medium', description: 'течёт труба в подвале', apartment_id: 12, user_id: 7,
+      caller_phone: '+998901112233',
     }])
   })
 

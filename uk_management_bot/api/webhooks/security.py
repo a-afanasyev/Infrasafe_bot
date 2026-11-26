@@ -44,6 +44,7 @@ def verify_signature(
         if not secret:
             continue
         expected = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
-        if hmac.compare_digest(expected, sig):
+        # bytes: на str с не-ASCII compare_digest бросает TypeError (500 вместо отказа).
+        if hmac.compare_digest(expected.encode(), sig.encode()):
             return True, ""
     return False, "no_match"

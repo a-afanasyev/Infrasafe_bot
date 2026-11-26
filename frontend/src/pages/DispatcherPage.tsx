@@ -122,7 +122,7 @@ export default function DispatcherPage() {
       patch({ resident: null, residentApartments: [] })
       return
     }
-    const list = await callCenterResidentApartments(m.id).catch((): ResidentApartment[] => [])
+    const list = await callCenterResidentApartments(m.id, residentQuery(draft.phone)).catch((): ResidentApartment[] => [])
     patch({ resident: { id: m.id, fullName: m.full_name?.trim() || draft.phone }, residentApartments: list, callerName: '' })
   }
 

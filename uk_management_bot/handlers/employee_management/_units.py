@@ -149,6 +149,9 @@ def _restore_employee(db: Session, actor_tg_id: int, employee_id: int) -> str:
     user = db.query(User).filter(User.id == employee_id).with_for_update().first()
     if not user or user.deleted_at is None:
         return "fail"
+    # A12-06: «восстановить -> одобрить» вернуло бы удалённого менеджера в обход A10-INT-01.
+    if AuthService._refuse_privileged(user, "восстановление"):
+        return "fail"
     details = {
         "restored_user_id": user.id,
         "deleted_at": user.deleted_at.isoformat(),

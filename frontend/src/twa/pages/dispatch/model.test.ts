@@ -78,6 +78,7 @@ describe('тело заявки', () => {
     })
     expect(buildCreateBody(d)).toEqual({
       category: 'plumbing', urgency: 'medium', description: 'течёт труба', apartment_id: 12, user_id: 7,
+      caller_phone: '+998901112233', // сервер сверяет номер звонящего с жителем
     })
   })
 
