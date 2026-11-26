@@ -91,3 +91,38 @@ def test_restore_refuses_working_employee_and_unknown_actor(db):
     assert _restore_employee(db, 999, gone.id) == "no_actor"
     db.refresh(working)
     assert working.status == "approved"
+
+
+# ── A12-06: восстановление и одобрение не обходят защиту привилегированных ──
+
+def test_restore_refuses_privileged_target(db):
+    """Удалённого менеджера рядовой менеджер из бота не возвращает: иначе
+    «восстановить → одобрить» обходило бы A10-INT-01."""
+    manager = _user(db, 30, roles=["manager"])
+    gone = _user(db, 31, roles=["manager"], status="deleted", deleted_at=WHEN)
+    assert _restore_employee(db, manager.telegram_id, gone.id) == "fail"
+    db.refresh(gone)
+    assert gone.status == "deleted" and gone.deleted_at is not None
+    assert db.query(AuditLog).filter(AuditLog.action == "user_restored").count() == 0
+
+
+@pytest.mark.parametrize("status", ["blocked", "deleted"])
+def test_approve_refuses_privileged_target_outside_pending(db, status):
+    from uk_management_bot.services.auth_service import AuthService
+
+    manager = _user(db, 40, roles=["manager"])
+    target = _user(db, 41, roles=["manager"], status=status)
+    assert AuthService(db).approve_user(target.id, manager.id, "c") == "error"
+    db.refresh(target)
+    assert target.status == status
+
+
+def test_approve_still_admits_invited_manager(db):
+    """Новый менеджер после инвайта — `pending`: его одобрение остаётся рабочим путём."""
+    from uk_management_bot.services.auth_service import AuthService
+
+    manager = _user(db, 50, roles=["manager"])
+    invited = _user(db, 51, roles=["manager"], status="pending", phone="+998901112233")
+    assert AuthService(db).approve_user(invited.id, manager.id, "c") == "ok"
+    db.refresh(invited)
+    assert invited.status == "approved"

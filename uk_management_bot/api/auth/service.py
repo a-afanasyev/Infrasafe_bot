@@ -393,7 +393,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from uk_management_bot.api.users.queries import get_user_by_id  # noqa: E402
 from uk_management_bot.database.models.refresh_token import (  # noqa: E402
-    RefreshToken, REASON_ROTATED, REASON_LOGOUT, REASON_REUSE,
+    RefreshToken, REASON_ROTATED, REASON_LOGOUT, REASON_PASSWORD, REASON_REUSE,
 )
 from uk_management_bot.database.models.user import User  # noqa: E402
 
@@ -533,7 +533,20 @@ async def revoke_refresh_token(db: AsyncSession, token_value: str) -> None:
         await db.commit()
 
 
-async def persist_password_hash(db: AsyncSession, user: User, password_hash: str) -> None:
-    """Сохраняет новый password_hash (проверки current-password — у роутера)."""
+async def persist_password_hash(
+    db: AsyncSession, user: User, password_hash: str, *, keep_token_value: Optional[str] = None,
+) -> None:
+    """Сохраняет новый password_hash (проверки current-password — у роутера).
+
+    Остальные сессии пользователя отзываются тем же коммитом: пароль меняют в
+    том числе потому, что сессию могли украсть. Текущая (`keep_token_value` —
+    refresh-кука запроса) остаётся, чтобы смена пароля не разлогинивала."""
     user.password_hash = password_hash
+    others = [RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)]
+    if keep_token_value:
+        others.append(RefreshToken.token_hash != hash_token(keep_token_value))
+    await db.execute(
+        _sa_update(RefreshToken).where(*others)
+        .values(revoked_at=datetime.now(timezone.utc), revocation_reason=REASON_PASSWORD)
+    )
     await db.commit()

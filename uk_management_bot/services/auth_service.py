@@ -229,6 +229,11 @@ class AuthService:
             if user.status == 'approved':
                 logger.info(f"Пользователь {user_id} уже одобрен")
                 return "ok"
+            # A12-06: одобрение — путь `pending -> approved` (в т. ч. менеджера
+            # после инвайта). Из blocked/deleted привилегированную цель оно не
+            # возвращает: иначе обходило бы отказ unblock_user (A10-INT-01).
+            if user.status != 'pending' and self._refuse_privileged(user, "одобрение"):
+                return "error"
             # Отказ — возвращаемый код, не исключение: общий except ниже его
             # не проглотит и не превратит в безликий "error".
             refusal = account_refusal(user)

@@ -8,6 +8,7 @@ REASON_ROTATED = "rotated"
 REASON_LOGOUT = "logout"
 REASON_REUSE = "reuse"
 REASON_ADMIN = "admin"
+REASON_PASSWORD = "password"  # остальные сессии при смене пароля
 
 
 class RefreshToken(Base):

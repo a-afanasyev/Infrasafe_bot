@@ -136,6 +136,37 @@ async def test_first_time_set_needs_no_current(client, db_session_factory):
 
 
 @pytest.mark.asyncio
+async def test_change_revokes_other_sessions_but_keeps_current(client_pw, db_session_factory, user_with_password):
+    """Смена пароля выбивает остальные сессии (украденный refresh-токен
+    перестаёт жить), текущая — та, чья кука пришла с запросом, — остаётся."""
+    from datetime import datetime, timedelta, timezone
+
+    from uk_management_bot.api.auth.service import hash_token
+    from uk_management_bot.database.models.refresh_token import RefreshToken
+
+    expires = datetime.now(timezone.utc) + timedelta(days=1)
+    async with db_session_factory() as s:
+        for value in ("current-session-token", "other-session-token"):
+            s.add(RefreshToken(user_id=user_with_password.id, token_hash=hash_token(value),
+                               expires_at=expires, family_id=value[:36]))
+        await s.commit()
+
+    client_pw.cookies.set("uk_refresh", "current-session-token")
+    r = await client_pw.post(
+        "/api/v2/auth/set-password",
+        json={"password": NEW, "confirm_password": NEW, "current_password": CURRENT},
+        headers=_h(5),
+    )
+    assert r.status_code == 200, r.text
+
+    async with db_session_factory() as s:
+        rows = {t.token_hash: t for t in (await s.execute(select(RefreshToken))).scalars()}
+    assert rows[hash_token("current-session-token")].revoked_at is None
+    other = rows[hash_token("other-session-token")]
+    assert other.revoked_at is not None and other.revocation_reason == "password"
+
+
+@pytest.mark.asyncio
 async def test_profile_reports_has_password_true(client_pw):
     r = await client_pw.get("/api/v2/profile")
     assert r.status_code == 200, r.text

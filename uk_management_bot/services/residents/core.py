@@ -148,6 +148,15 @@ def _audit(db: AsyncSession, *, action: str, actor_id: int, resident: User, deta
     ))
 
 
+async def record_document_view(db: AsyncSession, *, actor_id: int, resident: User, doc) -> None:
+    """A12-08: журнал доступа к документу жителя — кто, чей и какой смотрел."""
+    _audit(db, action="resident_document_viewed", actor_id=actor_id, resident=resident, details={
+        "document_id": doc.id,
+        "document_type": getattr(doc.document_type, "value", doc.document_type),
+    })
+    await db.commit()
+
+
 async def _finish(db: AsyncSession, *, event: str | None, payload: dict | None) -> None:
     """Единственный commit операции + пост-коммитная публикация.
 

@@ -35,7 +35,7 @@ from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import ResidentDocumentOut
 from uk_management_bot.database.models.user import User
 from uk_management_bot.integrations import get_media_client
-from uk_management_bot.services.residents import queries
+from uk_management_bot.services.residents import core, queries
 from uk_management_bot.utils.document_crypto import DocumentDecryptError, decrypt, document_aad
 from uk_management_bot.services.residents.exceptions import ResidentNotFound
 
@@ -153,6 +153,10 @@ async def get_document_file(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Неподдерживаемый тип файла",
         )
+
+    # A12-08: запись ДО выдачи и в одной точке для обоих хранилищ — не записалось
+    # в журнал, значит и документ не отдан (журнал доступа к ПДн обязателен).
+    await core.record_document_view(db, actor_id=user.id, resident=resident, doc=doc)
 
     inline = content_type in _INLINE_TYPES
     return Response(

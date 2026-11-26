@@ -38,7 +38,7 @@ def require_health_token(authorization: str | None = Header(default=None)):
             return
         raise HTTPException(status_code=503, detail="health token not configured")
     expected = f"Bearer {token}"
-    if not authorization or not hmac.compare_digest(authorization, expected):
+    if not authorization or not hmac.compare_digest(authorization.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
